@@ -1,7 +1,10 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.3.1";
+export const VERSION = "3.3.2";
 export const CHANGELOG = [
+  { version: "3.3.2", date: "2026-11-02", by: "Kevin", editor: "Claude", changes: [
+    "Start page: Open project is a large main button right under Load model from Gen NX (was a small link at the bottom).",
+  ] },
   { version: "3.3.1", date: "2026-11-02", by: "Kevin", editor: "Claude", changes: [
     "Login page uses the app's colours and font: ink-black background, yellow Log in button, Geist, same layout as the start page (was white with a red button).",
   ] },

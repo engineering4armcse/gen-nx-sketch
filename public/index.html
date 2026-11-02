@@ -25,6 +25,7 @@
       </label>
       <label class="check"><input type="checkbox" id="remember"> Remember the key on this computer</label>
       <button id="connect" type="submit" class="primary">Load model from Gen NX</button>
+      <button id="openJson" type="button" class="primary open-proj">Open project…</button>
       <div id="loadProg" class="prog" role="progressbar" aria-label="Reading the model" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
         <div class="prog-track"><div id="progFill" class="prog-fill"></div></div>
         <p class="prog-text"><span id="progLabel"></span><span id="progCount"></span></p>
@@ -41,7 +42,7 @@
       </details>
       <input id="fileJson" type="file" accept=".json,application/json" hidden>
     </form>
-    <p class="start-foot"><button id="openLog" type="button" class="link">Version <span id="appVersion"></span> · history</button><span><button id="openJson" type="button" class="link">Open project</button> · <button id="demo" type="button" class="link">Demo</button><span id="backWrap" hidden> · <button id="backToWork" type="button" class="link">Back to drawings</button></span></span></p>
+    <p class="start-foot"><button id="openLog" type="button" class="link">Version <span id="appVersion"></span> · history</button><span><button id="demo" type="button" class="link">Demo</button><span id="backWrap" hidden> · <button id="backToWork" type="button" class="link">Back to drawings</button></span></span></p>
   </div>
 </section>
 <dialog id="revDlg" aria-labelledby="revTitle">

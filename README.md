@@ -1,10 +1,10 @@
 # Gen NX Sketch
 
-Version 3.3.1. What changed in each version, and who asked for it, is in [CHANGELOG.md](CHANGELOG.md) and on the start page under *What changed in each version*.
+Version 3.3.2. What changed in each version, and who asked for it, is in [CHANGELOG.md](CHANGELOG.md) and on the start page under *What changed in each version*.
 
 Web app that reads a MIDAS Gen NX model through the MIDAS API and draws sketch plans and elevations for drafters.
 
-- **Start page:** enter the project name and MAPI-Key, then *Load model from Gen NX*, *Open a model JSON* or *Try the demo model*. *Change project or model* in the sidebar brings it back.
+- **Start page:** enter the project name and MAPI-Key, then *Load model from Gen NX* or *Open project…* (the two main buttons), or *Demo*. *Change project or model* in the sidebar brings it back.
 - **Input:** base URL (default `https://moa-engineers.midasit.com:443/gen`) and your MAPI-Key (Gen NX > Apps > API Settings). Gen NX must be open with the model loaded.
 - **Reads:** `/db/NODE`, `/db/ELEM`, `/db/SECT`, `/db/THIK`, `/db/STOR`, `/db/MATL`, `/db/UNIT` (read only).
 - **Writes, only on "Send edits to Gen NX":** `/db/REBB` and `/db/REBC`, the edited rebar types (two presses; save the Gen NX model first).

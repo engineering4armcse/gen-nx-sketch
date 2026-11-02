@@ -2,6 +2,12 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.3.2 (2026-11-02)
+
+Requested by Kevin · edited by Claude
+
+- Start page: Open project is a large main button right under Load model from Gen NX (was a small link at the bottom).
+
 ## 3.3.1 (2026-11-02)
 
 Requested by Kevin · edited by Claude

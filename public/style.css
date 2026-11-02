@@ -308,3 +308,5 @@ body:not(.tab-rebar) aside .rebar-only{display:none!important}
 .logout:hover{color:var(--frame-text)}
 .chip.dirty::before{border-radius:50%;background:var(--frame-text)}
 .revbtns button{width:auto;flex:1 1 auto;margin:0}
+/* Open project: the second main action on the start page, right under Load model from Gen NX */
+#start .open-proj{margin-top:10px}
