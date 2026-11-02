@@ -1,2 +1,8 @@
 node_modules
 .netlify
+
+# Local-only files (kept on disk, not in the repo)
+*.bat
+*.ico
+Gen-NX-Sketch-local.html
+build-local.mjs

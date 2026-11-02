@@ -36,16 +36,12 @@ Set the environment variable `APP_PASSWORD` and the site asks for that password 
 - Netlify: *Site configuration > Environment variables > Add a variable*: key `APP_PASSWORD`, value the team password. Redeploy (Deploys > Trigger deploy) after adding or changing it.
 - Optional `APP_SECRET` (any long random text): changing it, or the password, logs everyone out.
 - Local server: `APP_PASSWORD=yourpassword node server.mjs` (Windows cmd: `set APP_PASSWORD=yourpassword` then `node server.mjs`).
-- The login lasts 30 days on each device; *Log out* is at the top right. `Gen-NX-Sketch-local.html` (file version) has no login.
+- The login lasts 30 days on each device; *Log out* is at the top right.
 
 ## Output Sketch
 
 The **Output Sketch** button saves one ZIP with every drawing:
 `<Project>_Sketch/PDF/` (one PDF per drawing type), `DXF/` (one DXF per drawing type) and `HTML/` (the 2D, rebar and 3D views in one file).
-
-## Local file version (no server)
-
-`Gen-NX-Sketch-local.html` is the whole app in one file: double-click it, no Node.js needed, works offline with **Open JSON** and the demo model. Without the server there is no API proxy, so **Load model from Gen NX** only works if the browser is allowed to call the API directly; otherwise save a Model JSON with the server version (or export it from Gen NX) and open that. After changing files in `public/`, rebuild it with `node build-local.mjs`.
 
 ## Run on your computer (quickest)
 
