@@ -1,7 +1,10 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.3";
+export const VERSION = "3.3.1";
 export const CHANGELOG = [
+  { version: "3.3.1", date: "2026-11-02", by: "Kevin", editor: "Claude", changes: [
+    "Login page uses the app's colours and font: ink-black background, yellow Log in button, Geist, same layout as the start page (was white with a red button).",
+  ] },
   { version: "3.3", date: "2026-11-02", by: "Kevin", editor: "Claude", changes: [
     "Save project (Ctrl+S) and Save as (Ctrl+Shift+S) replace Model JSON. The project file holds the Gen NX tables, the rebar edits and now also the project settings: project name, manual grid, grid tolerance, display, text size, slab thickness, beam top, red marks, DXF units. The MAPI-Key is never saved in it.",
     "Chrome and Edge write to the chosen file: the first save asks where, the next Ctrl+S overwrites the same file. Other browsers download the file. If the file was changed on disk after it was opened, Save asks before overwriting.",

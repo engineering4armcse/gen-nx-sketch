@@ -2,6 +2,12 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.3.1 (2026-11-02)
+
+Requested by Kevin · edited by Claude
+
+- Login page uses the app's colours and font: ink-black background, yellow Log in button, Geist, same layout as the start page (was white with a red button).
+
 ## 3.3 (2026-11-02)
 
 Requested by Kevin · edited by Claude
