@@ -253,11 +253,14 @@ function renderViewList() {
   $("#groupBar").innerHTML = state.groups.map(([h, vs], i) => `<button type="button" role="tab" data-g="${i}" aria-selected="${i === gi}" class="${i === gi ? "on" : ""}">${h}<span class="n">${vs.length}</span></button>`).join("");
   fillViewSel();
 }
+// the export choice names the drawing type it covers: "Column schedule & sections (6 sheets)"
+function labelScopeGroup() { const g = curGroup(), o = $("#scopeGroup"); if (o) o.textContent = g ? `${g[0]} (${g[1].length} sheet${g[1].length > 1 ? "s" : ""})` : "This drawing type"; }
 function fillViewSel() {
   const g = state.groups[+$("#viewType").value];
   $("#viewSel").innerHTML = g ? g[1].map(v => `<option value="${v.id}">${v.title.replace(/^(BEAM REBAR PLAN \((?:MAIN BARS|STIRRUPS & SKIN)\)|COLUMN REBAR PLAN|COLUMN PLAN|COLUMN|BEAM PLAN|BEAM|ELEVATION|BEAM REBAR|COLUMN REBAR|BEAM SHOP DRAWING|COLUMN SHOP DRAWING) - /, "")}</option>`).join("") : "";
   if (g && !g[1].some(v => v.id === state.currentId)) state.currentId = g[1][0].id;
   $("#viewSel").value = state.currentId;
+  labelScopeGroup();
 }
 function stepView(d) {
   const vs = tabViews(), i = vs.findIndex(v => v.id === state.currentId), v = vs[(i + d + vs.length) % vs.length];
@@ -524,8 +527,10 @@ function download(blob, name) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
-const scoped = () => ($("#scope").value === "all" ? tabViews() : [current()]).filter(v => v && v.items);
-const scopeName = vs => (vs.length > 1 ? "all_views" : slug(vs[0].title));
+// export scope: this sheet, every sheet of the drawing type picked above (e.g. Column schedule & sections), or every sheet of the tab
+const curGroup = () => state.groups?.[+$("#viewType").value];
+const scoped = () => ({ all: tabViews(), group: curGroup()?.[1] || [] }[$("#scope").value] || [current()]).filter(v => v && v.items);
+const scopeName = vs => (vs.length === 1 ? slug(vs[0].title) : $("#scope").value === "group" && curGroup() ? slug(curGroup()[0]) : "all_views");
 const need = () => { if (!state.model) { status("Load a model first.", "err"); return false; } return true; };
 
 const EXPORTS = {

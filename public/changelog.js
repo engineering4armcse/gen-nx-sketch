@@ -1,7 +1,10 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.22";
+export const VERSION = "3.23";
 export const CHANGELOG = [
+  { version: "3.23", date: "2026-11-02", by: "Kevin", editor: "Claude", changes: [
+    "PDF and DXF export: new choice between This view and All views that exports only the sheets of the drawing type picked above, e.g. \"Column schedule & sections (6 sheets)\" or \"Beam plans: stirrups\". The file is named after that drawing type.",
+  ] },
   { version: "3.22", date: "2026-11-02", by: "Arnold", editor: "Claude", changes: [
     "Merged in Kevin's versions 3.3 to 3.3.2 (made in parallel from 3.2): project files, recent projects, model revisions, login, and the items below.",
     "Save project (Ctrl+S) and Save as (Ctrl+Shift+S) replace Model JSON. The project file holds the Gen NX tables, the rebar edits and now also the project settings: project name, manual grid, grid tolerance, display, text size, slab thickness, beam top, red marks, DXF units. The MAPI-Key is never saved in it.",

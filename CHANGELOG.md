@@ -2,6 +2,12 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.23 (2026-11-02)
+
+Requested by Kevin · edited by Claude
+
+- PDF and DXF export: new choice between This view and All views that exports only the sheets of the drawing type picked above, e.g. "Column schedule & sections (6 sheets)" or "Beam plans: stirrups". The file is named after that drawing type.
+
 ## 3.22 (2026-11-02)
 
 Requested by Arnold · edited by Claude
