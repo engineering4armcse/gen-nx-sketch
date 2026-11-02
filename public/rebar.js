@@ -124,8 +124,9 @@ export function parseRebar(raw, model) {
 }
 
 // ---------- rebar edited by the user (Rebar detail > Edit rebar), kept in the Model JSON as REBAR_USER ----------
-// key "beam|<section name>|<n>" or "col|<section name>|<n>": n = position of the arrangement in that section (0 based), so
-// an edit stays on its type when the model is loaded again. A key for a section with no Gen NX rebar adds a type.
+// key "beam|<section name>|<n>" or "col|<section name>|<n>": n = position of the arrangement in that section (0 based).
+// Since 3.3 the value also carries _sig (the Gen NX arrangement it was made on) and _elems, so the edit follows its type
+// when a model revision reorders the arrangements. A key for a section with no Gen NX rebar adds a type.
 // "4D19 + 2D19" -> [{ n: 4, bar: "D19" }, { n: 2, bar: "D19" }]
 export const parseBars = t => String(t || "").split("+").map(x => /^\s*(\d+)\s*([A-Z#Ø]*\s*\d+(?:\.\d+)?)\s*$/i.exec(x)).filter(Boolean).map(m => ({ n: +m[1], bar: m[2].replace(/\s+/g, "").toUpperCase() }));
 // "D10-100" -> { bar: "D10", s: 0.1 }
@@ -180,21 +181,35 @@ export function editValues(d, kind) {
   return { n1: l.n1 || "", n2: l.n2 || "", bar: l.bar || "", dc: Math.round((l.dc ?? 0.05) * 1000), tieEnd: tieStr(t), tieMid: tieStr(c), ny: t?.ny || 2, nz: t?.nz || 2 };
 }
 
+// fingerprint of a type's Gen NX arrangement (before any edit): bars, covers and ties, not the elements or the name
+const rebarSig = d => { const { elems, sub, src, origin, key, name, sect, edited, gsig, ...x } = d; let h = 5381; for (const c of JSON.stringify(x)) h = (h * 33 + c.charCodeAt(0)) >>> 0; return h.toString(36); };
 function applyEdits(out, edits, model, f, elemsOf) {
   const sname = sid => (model.sects.get(sid) || {}).name;
   const sidOf = new Map([...model.sects].map(([id, s]) => [s.name, id]));
+  out.orphans = []; out.changed = [];
   for (const [kind, list] of [["beam", out.beams], ["col", out.cols]]) {
     const per = new Map();
-    for (const d of list) { const n = sname(d.sect); per.set(n, (per.get(n) || 0) + 1); d.key = `${kind}|${n || d.sect}|${per.get(n) - 1}`; }
-    for (const [key, v] of Object.entries(edits)) {
+    for (const d of list) { const n = sname(d.sect); per.set(n, (per.get(n) || 0) + 1); d.key = `${kind}|${n || d.sect}|${per.get(n) - 1}`; d.gsig = rebarSig(d); }
+    // an edit finds its type by the Gen NX arrangement it was made on (_sig), so a revision that adds or drops an arrangement
+    // of the section does not move it to another type; edits from files before 3.3 have no _sig and keep the position (n)
+    const used = new Set();
+    for (let [key, v] of Object.entries(edits)) {
       const [k, name] = key.split("|");
       if (k !== kind || !v) continue;
-      let d = list.find(x => x.key === key);
+      const same = list.filter(x => sname(x.sect) === name && !used.has(x));
+      let d = v._sig && v._sig !== "none" ? same.find(x => x.gsig === v._sig) : same.find(x => x.key === key);
+      if (!d && v._sig && v._sig !== "none" && same.length) { // Gen NX changed this arrangement: the type sharing most elements
+        const was = new Set(v._elems || []), score = x => x.elems.filter(id => was.has(id)).length;
+        d = same.reduce((a, b) => (score(b) > score(a) ? b : a));
+        out.changed.push(d);
+      }
+      if (d && d.key !== key) { delete edits[key]; edits[d.key] = v; key = d.key; } // stored under the type's current key
       if (!d) { // a section without Gen NX rebar
         const sid = sidOf.get(name), elems = sid === undefined ? [] : elemsOf(sid, kind === "beam" ? "beam" : "column");
-        if (!elems.length) continue;
-        d = { sect: sid, elems, key, sectors: [], layers: [] }; list.push(d);
+        if (!elems.length) { out.orphans.push({ key, name, kind }); continue; }
+        d = { sect: sid, elems, key, sectors: [], layers: [], gsig: "none" }; list.push(d);
       }
+      used.add(d);
       d.src = "rebar edited in this app"; d.edited = true;
       if (kind === "beam") {
         const lay = (bars, dc) => { let y = dc; return parseBars(bars).map((b, j, a) => { if (j) y += barDia(a[j - 1].bar) / 2 + LAYER_GAP + barDia(b.bar) / 2; return { ...b, d: y }; }); };

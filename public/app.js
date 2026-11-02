@@ -7,12 +7,14 @@ import { buildShopViews, shopBBS, bbsCsv } from "./shop.js";
 import { buildBundleHtml } from "./bundle.js";
 import { makeZip } from "./zip.js";
 import { VERSION, CHANGELOG } from "./changelog.js";
+import * as P from "./project.js";
 
 const $ = s => document.querySelector(s);
-const SETTINGS_KEY = "gnx-sketch-settings", EDITS_KEY = "gnx-sketch-rebar-edits"; // rebar edits, by type key (kind|section|n)
+const SETTINGS_KEY = "gnx-sketch-settings", EDITS_KEY = "gnx-sketch-rebar-edits"; // EDITS_KEY: rebar edits of versions before 3.3, read once to migrate
 // local single-file build: vendor libraries are embedded in the page instead of served from vendor/
 const VENDOR = window.__GNX_VENDOR || null;
-const state = { raw: null, source: "", model: null, views: [], currentId: null, tab: "2d", grids: null, levels: null, colors: null, connMode: null, dirty3d: true };
+const state = { raw: null, source: "", model: null, views: [], currentId: null, tab: "2d", grids: null, levels: null, colors: null, connMode: null, dirty3d: true,
+  project: null, handle: null, fileName: "", fileTime: 0, dirty: false }; // project: GNX_PROJECT of the open project; handle: its file (Chrome/Edge)
 
 // ---------- settings ----------
 const FIELDS = ["base", "conn", "colorMode", "labels", "tol", "gridMode", "gridX", "gridY", "project", "dxfUnits", "scope", "remember", "fontMm", "slabT", "beamTop", "markNoRebar", "gridAlpha"];
@@ -28,6 +30,11 @@ function saveSettings() {
   if (s.remember) s.key = $("#key").value;
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
 }
+// the settings that belong to a project (saved in its file as GNX_SETTINGS); key, base URL and route belong to the computer
+const PROJECT_FIELDS = ["project", "colorMode", "labels", "tol", "gridMode", "gridX", "gridY", "dxfUnits", "scope", "fontMm", "slabT", "beamTop", "markNoRebar", "gridAlpha"];
+function projectSettings() { const s = {}; for (const f of PROJECT_FIELDS) { const el = $("#" + f); s[f] = el.type === "checkbox" ? el.checked : el.value; } return s; }
+function applyProjectSettings(s) { for (const f of PROJECT_FIELDS) if (s?.[f] !== undefined) { const el = $("#" + f); el.type === "checkbox" ? (el.checked = !!s[f]) : (el.value = s[f]); } $("#startProject").value = $("#project").value; fillGridTables(); }
+
 
 // the sidebar line keeps the full message; the viewbar repeats it next to the drawing, where the eye is
 const status = (msg, kind = "") => {
@@ -79,20 +86,25 @@ function progress(i, label) {
   $("#progFill").style.transform = `scaleX(${pct / 100})`;
   $("#progLabel").textContent = label; $("#progCount").textContent = `${pct}%`;
 }
+async function fetchTables() {
+  const raw = {};
+  for (const [i, [t, name]] of TABLES.entries()) {
+    progress(i, `Reading ${name} (${t}) from Gen NX…`); $("#viewStatus").textContent = `Reading ${t} from Gen NX…`;
+    try { raw[t] = await midasGet("/db/" + t); }
+    catch (e) { if (t === "NODE" || t === "ELEM") throw e; raw[t] = {}; }
+  }
+  if (!Object.keys(C.tableOf(raw.NODE, "NODE")).length) throw new Error("The model has no nodes. Is the right model open in Gen NX?");
+  return raw;
+}
+// start page: a new project from the model open in Gen NX
 async function loadFromMidas() {
   saveSettings();
   const btn = $("#connect"); btn.disabled = true; busy(true); status("");
   try {
-    const raw = {};
-    for (const [i, [t, name]] of TABLES.entries()) {
-      progress(i, `Reading ${name} (${t}) from Gen NX…`); $("#viewStatus").textContent = `Reading ${t} from Gen NX…`;
-      try { raw[t] = await midasGet("/db/" + t); }
-      catch (e) { if (t === "NODE" || t === "ELEM") throw e; raw[t] = {}; }
-    }
-    if (!Object.keys(C.tableOf(raw.NODE, "NODE")).length) throw new Error("The model has no nodes. Is the right model open in Gen NX?");
+    const raw = await fetchTables();
     progress(TABLES.length, "Drawing plans, elevations and rebar…");
     await new Promise(r => setTimeout(r, 350)); // let the full bar show before the workspace opens
-    setModel(raw, "MIDAS Gen NX");
+    openProject({ raw, project: null, settings: null }, "MIDAS Gen NX", { midasReadAt: new Date().toISOString() });
     progress(null);
   } catch (e) {
     progress(null); status(e.message, "err");
@@ -100,23 +112,42 @@ async function loadFromMidas() {
 }
 
 // ---------- model -> views ----------
-function setModel(raw, source) {
+// p = P.readProject(...): a project file brings its own settings and rebar edits; an old Model JSON, a Gen NX export or a
+// fresh read from Gen NX starts a new project with the settings on screen.
+// opt: { handle, fileName, fileTime } of the file it came from, midasReadAt, restored (from the browser copy)
+function openProject(p, source, opt = {}) {
+  const fresh = !p.project;
+  state.project = fresh
+    ? { id: P.newId(), name: $("#project").value.trim() || $("#startProject").value.trim(), createdAt: new Date().toISOString(), source, midasReadAt: opt.midasReadAt || null, revisions: [] }
+    : { revisions: [], ...p.project };
+  if (!fresh) applyProjectSettings(p.settings);
+  // only a project file keeps its handle: Ctrl+S on an old Model JSON asks where to save the project file
+  state.handle = fresh ? null : opt.handle || null; state.fileName = fresh ? "" : opt.fileName || ""; state.fileTime = opt.fileTime || 0;
+  setModel(p.raw, source, fresh);
+  if (fresh) $("#project").value = $("#startProject").value = state.project.name || $("#project").value;
+  if (p.newer) status("This file was made by a newer version of Gen NX Sketch; settings it does not know are ignored.", "err");
+  setDirty(!!opt.restored || fresh);
+  if (opt.restored) status(`Restored the unsaved changes of ${state.project.name || "the project"}. Save to keep them in the file.`, "ok");
+  remember();
+}
+// migrate: rebar edits kept in the browser by versions before 3.3 (not per project), only for files without their own
+function setModel(raw, source, migrate) {
   // a full Gen NX database export {"DBG": {"NODE": {...}, ...}}: give each table its usual {"NODE": {...}} wrapper
   if (raw.DBG && !raw.NODE) raw = Object.fromEntries(Object.entries(raw.DBG).map(([k, v]) => [k, { [k]: v }]));
   state.raw = raw; state.source = source;
   state.model = C.normalizeModel(raw);
-  // rebar edited earlier on this computer comes back for types of the same section name, unless the JSON carries its own
-  const saved = loadEdits();
   if (!raw.REBAR_USER) raw.REBAR_USER = {};
-  const names = new Set([...state.model.sects.values()].map(x => x.name));
-  for (const [k, v] of Object.entries(saved)) if (!(k in raw.REBAR_USER) && names.has(k.split("|")[1])) raw.REBAR_USER[k] = v;
+  if (migrate) {
+    const saved = loadEdits(), names = new Set([...state.model.sects.values()].map(x => x.name));
+    for (const [k, v] of Object.entries(saved)) if (!(k in raw.REBAR_USER) && names.has(k.split("|")[1])) raw.REBAR_USER[k] = v;
+  }
   const m = state.model, kinds = {};
   for (const e of m.elems) kinds[e.kind] = (kinds[e.kind] || 0) + 1;
   $("#summary").innerHTML = `<b>${source}</b> · unit ${m.unit}<br>${m.nodes.size} nodes · ${m.elems.length} elements` +
     `<br>${Object.entries(kinds).map(([k, n]) => `${n} ${C.KIND_LABEL[k].toLowerCase()}`).join(" · ")}` +
     `<br>${m.sects.size} sections · ${m.thick.size} thicknesses · ${m.stories.length ? m.stories.length + " stories" : "no story data (levels from geometry)"}`;
   document.body.classList.add("has-model"); document.body.classList.remove("on-start"); $("#backWrap").hidden = false;
-  const chip = $("#modelChip"); chip.textContent = `${source} · ${m.elems.length} elements`; chip.hidden = false;
+  $("#modelChip").hidden = false;
   status(`Loaded ${m.elems.length} elements.`, "ok");
   $("#dataDl").hidden = false;
   rebuild();
@@ -175,6 +206,8 @@ function rebuild() {
   C.setGridAlpha(+$("#gridAlpha").value / 100); $("#gridAlphaV").textContent = `${$("#gridAlpha").value}%`;
   const opts = { colorMode: $("#colorMode").value, labels: $("#labels").checked, fontScale: fontScale(), beamTop: $("#beamTop").checked, markNoRebar: $("#markNoRebar").checked, slabT: slabT(), info: C.sectionInfo(m), grids, levels: state.levels, colors: state.colors, planeTol: tol, levelTol: 0.05 };
   state.rebar = parseRebar(state.raw, m);
+  state.rebarNote = [state.rebar.orphans.length ? `Rebar edits with no section in the model: ${state.rebar.orphans.map(o => o.name).join(", ")} (kept in the file).` : "",
+    state.rebar.changed.length ? `Gen NX changed the rebar of ${state.rebar.changed.map(d => d.name).join(", ")}; the edits made here are kept, check them.` : ""].filter(Boolean).join(" ");
   // members of a section with several rebar types are labelled by type (B2A3, B2A3-A ...) in plans and elevations
   m.typeOf = new Map();
   for (const d of [...state.rebar.beams, ...state.rebar.cols]) if (d.sub) for (const id of d.elems) m.typeOf.set(id, d.name);
@@ -190,6 +223,7 @@ function rebuild() {
   drawCurrent();
   state.dirty3d = true;
   if (!$("#pane3d").hidden) show3d();
+  if (state.rebarNote) status(state.rebarNote, "err");
 }
 // shop drawing sheets (one per beam line and column stack) and the schedule taken from them
 function shopViews() {
@@ -321,7 +355,6 @@ function goEdit() {
 }
 const SECT_KEYS = [["I", "Support I"], ["M", "Midspan"], ["J", "Support J"]];
 function loadEdits() { try { return JSON.parse(localStorage.getItem(EDITS_KEY) || "{}"); } catch { return {}; } }
-function storeEdit(key, v) { const s = loadEdits(); if (v) s[key] = v; else delete s[key]; try { localStorage.setItem(EDITS_KEY, JSON.stringify(s)); } catch {} }
 // every type with rebar, plus concrete beam/column sections that have none yet
 function editTypes() {
   const m = state.model, out = [], has = new Set();
@@ -389,8 +422,9 @@ function applyEdit(reset) {
     else v = Object.fromEntries(["n1", "n2", "bar", "dc", "tieEnd", "tieMid", "ny", "nz"].map(f => [f, $("#ed_" + f).value.trim()]));
     if (t.kind === "col" && !(+v.n1 > 0 && /\d/.test(v.bar))) { status("Enter the number of bars and the main bar, for example D19.", "err"); return; }
   }
-  if (v) state.raw.REBAR_USER[t.key] = v; else delete state.raw.REBAR_USER[t.key];
-  storeEdit(t.key, v);
+  // the Gen NX arrangement it was made on, so the edit follows its type through a model revision (see rebar.js applyEdits)
+  if (v) state.raw.REBAR_USER[t.key] = { ...v, _sig: t.det?.gsig || "none", _elems: t.det?.elems || [] }; else delete state.raw.REBAR_USER[t.key];
+  setDirty(true);
   const keepTab = state.tab; rebuild();
   const d = [...state.rebar.beams, ...state.rebar.cols].find(x => x.key === t.key);
   if (d) openRebarFor(d.elems); else if (keepTab === "rebar") show2d("rebar");
@@ -407,8 +441,7 @@ function confirmed(b, ask) {
 function resetAllEdits() {
   if (!Object.keys(state.raw.REBAR_USER || {}).length) { status("No rebar edits to remove.", ""); return; }
   if (!confirmed($("#edResetAll"), "Press again to remove all edits")) return;
-  for (const k of Object.keys(state.raw.REBAR_USER || {})) storeEdit(k, null);
-  state.raw.REBAR_USER = {}; rebuild(); status("All rebar edits removed; Gen NX rebar is used again.", "ok");
+  state.raw.REBAR_USER = {}; rebuild(); setDirty(true); status("All rebar edits removed; Gen NX rebar is used again.", "ok");
 }
 // Send the edited types to the model open in Gen NX (PUT /db/REBB, /db/REBC), read the tables back, and drop each edit
 // Gen NX now holds: its type is then drawn from the Gen NX data again. Two presses, like the reset.
@@ -433,9 +466,9 @@ async function pushEdits() {
     const back = parseRebar({ ...state.raw, REBAR_USER: {} }, state.model), kept = [];
     for (const d of sent) {
       const kind = state.rebar.beams.includes(d) ? "beam" : "col", g = (kind === "beam" ? back.beams : back.cols).find(x => x.key === d.key);
-      if (g && JSON.stringify(editValues(g, kind)) === JSON.stringify(editValues(d, kind))) { delete state.raw.REBAR_USER[d.key]; storeEdit(d.key, null); } else kept.push(d);
+      if (g && JSON.stringify(editValues(g, kind)) === JSON.stringify(editValues(d, kind))) { delete state.raw.REBAR_USER[d.key]; } else kept.push(d);
     }
-    rebuild();
+    rebuild(); setDirty(true);
     const ok = sent.filter(d => !kept.includes(d));
     status((ok.length ? `Sent to Gen NX: ${names(ok)} (Gen NX took ${tSend} s, read back in ${secs() - tSend} s).` : "") + (kept.length ? ` Gen NX did not show ${names(kept)} as sent; those edits are kept here.` : "") + why, kept.length ? "err" : "ok");
   } catch (e) {
@@ -537,21 +570,147 @@ const EXPORTS = {
     }
     download(new Blob(["\ufeff" + rows.map(r => r.map(q).join(",")).join("\r\n")], { type: "text/csv" }), `${fileBase()}_elements.csv`);
   },
-  json() { download(new Blob([JSON.stringify(state.raw)], { type: "application/json" }), `${fileBase()}_model.json`); },
 };
+
+// ---------- project: save, open, recent, autosave (3.3) ----------
+const projName = () => $("#project").value.trim() || state.project?.name || "Project";
+const hhmm = t => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const when = t => { const d = new Date(t), today = new Date().toDateString() === d.toDateString(); return today ? hhmm(t) : d.toISOString().slice(0, 10) + " " + hhmm(t); };
+function currentProject() {
+  state.project.name = projName();
+  return P.buildProject(state.raw, state.project, projectSettings(), VERSION);
+}
+// ● in the model chip and the tab title while the project has changes not yet in its file
+function setDirty(on) {
+  state.dirty = on;
+  const chip = $("#modelChip"), m = state.model;
+  if (m) chip.textContent = `${projName()} · ${state.fileName || "not saved to a file yet"} · ${m.elems.length} elements`;
+  chip.classList.toggle("dirty", on);
+  chip.title = on ? "Changes not saved to the project file (Ctrl+S)" : "Saved";
+  document.title = (on ? "● " : "") + (m ? projName() + " · " : "") + "Gen NX Sketch";
+  clearTimeout(state.autoT);
+  if (on) state.autoT = setTimeout(autosaveNow, 2000);
+}
+// the browser copy: "Recent projects" on the start page, and the restore when the tab closed before a save
+function autosaveNow() {
+  clearTimeout(state.autoT);
+  if (!state.model || !state.project) return;
+  P.putRecent({ id: state.project.id, name: projName(), fileName: state.fileName, changedAt: Date.now(), unsaved: state.dirty, data: currentProject() });
+}
+function remember() {
+  if (!state.project) return;
+  const data = currentProject(); // saved: the last version in the file, what Discard goes back to
+  P.putRecent({ id: state.project.id, name: projName(), fileName: state.fileName, handle: state.handle || undefined, changedAt: Date.now(), unsaved: state.dirty, data, ...(state.dirty ? {} : { saved: data }) });
+}
+// Save: to the project's file when it has one (Chrome/Edge), else a new file (dialog) or a download.
+// asNew: Save as. copy: write the project to another file and stay on the current one (keeps a version before a revision)
+async function saveProject(asNew, copy = false, suggested) {
+  if (!state.model) return false;
+  const proj = currentProject(), text = JSON.stringify(proj), name = suggested || `${fileBase()}_project.json`;
+  busy(true);
+  try {
+    let handle = !asNew && !copy ? state.handle : null;
+    if (handle && state.fileTime) {
+      // another tab or another person may have saved the same file since it was opened here
+      try { const t = (await handle.getFile()).lastModified; if (t > state.fileTime + 1000 && !confirm(`${handle.name} was changed on disk at ${when(t)}, after you opened it. Overwrite it with this version?`)) { status("Not saved. Use Save as to keep both versions.", ""); return false; } } catch {}
+    }
+    if (!handle && P.canPickFiles()) { handle = await P.pickSaveFile(name); if (!handle) { status("Not saved.", ""); return false; } }
+    if (handle) {
+      const t = await P.writeHandle(handle, text);
+      if (copy) { status(`Saved a copy as ${handle.name}.`, "ok"); return true; }
+      state.handle = handle; state.fileName = handle.name; state.fileTime = t;
+    } else {
+      download(new Blob([text], { type: "application/json" }), name);
+      if (copy) { status(`Copy downloaded as ${name}.`, "ok"); return true; }
+      state.fileName = name;
+    }
+    state.project = proj.GNX_PROJECT; setDirty(false); remember();
+    status(`Saved ${state.fileName} at ${hhmm(Date.now())}.` + (handle ? " Ctrl+S saves to this file again." : " Downloaded: keep it in the project folder; this browser cannot write to a file directly."), "ok");
+    return true;
+  } catch (e) {
+    status(`Not saved: ${e.message}. Try Save as to another folder; your work is still here and in this browser.`, "err"); return false;
+  } finally { busy(false); }
+}
+async function openFile() {
+  if (!P.canPickFiles()) { $("#fileJson").click(); return; }
+  try { const h = await P.pickOpenFile(); if (h) await openFromFile(await h.getFile(), h); }
+  catch (e) { status(`Could not open the file: ${e.message}.`, "err"); }
+}
+async function openFromFile(f, handle = null) {
+  try {
+    const p = P.readProject(JSON.parse(await f.text()));
+    openProject(p, p.project ? "Project file" : f.name, { handle, fileName: f.name, fileTime: f.lastModified });
+    if (!p.project) status(`Opened ${f.name} (Model JSON without project settings). Save makes it a project file.`, "ok");
+    else status(`Opened ${f.name}${p.project.savedAt ? `, saved ${when(p.project.savedAt)}` : ""}.`, "ok");
+  } catch (err) { status(`Could not read ${f.name}: ${err.message}. Open a project file or Model JSON saved from this app, or a Gen NX database (DBG) export.`, "err"); }
+}
+// Recent projects: from the file on disk when the browser still may read it, else from the copy kept in this browser
+async function openRecent(id, restore) {
+  const r = await P.getRecent(id);
+  if (!r) { renderRecent(); return; }
+  takeProject();
+  if (!restore && r.handle) {
+    try {
+      if (await P.readable(r.handle)) { const f = await r.handle.getFile(); await openFromFile(f, r.handle); return; }
+    } catch {}
+    status(`Could not read ${r.fileName} from disk (moved or no permission); opened the copy kept in this browser.`, "err");
+  }
+  const p = P.readProject(r.data);
+  openProject(p, "Project", { handle: r.handle || null, fileName: r.fileName, fileTime: 0, restored: restore });
+  if (!restore && !r.handle) status(`Opened ${r.name} from the copy kept in this browser (${when(r.changedAt)}).`, "ok");
+}
+async function renderRecent() {
+  const list = await P.listRecent(), box = $("#recent");
+  box.hidden = !list.length;
+  if (!list.length) return;
+  const un = list.find(r => r.unsaved && r.id !== state.project?.id);
+  $("#restoreBar").hidden = !un;
+  if (un) { $("#restoreText").textContent = `${un.name || "A project"} has changes from ${when(un.changedAt)} that were not saved to its file.`; $("#restoreBar").dataset.id = un.id; }
+  $("#recentList").innerHTML = list.map(r => `<li><button type="button" class="link" data-open="${esc(r.id)}">${esc(r.name || "Untitled")}</button>` +
+    `<span class="muted">${esc(r.fileName || "not saved to a file")} · ${esc(when(r.changedAt))}${r.unsaved ? " · unsaved changes" : ""}</span>` +
+    `<button type="button" class="x" data-forget="${esc(r.id)}" aria-label="Remove ${esc(r.name || "")} from the list">×</button></li>`).join("");
+}
+// Revision: read the tables again from Gen NX, show what changed, keep the project, settings and rebar edits
+async function updateFromMidas() {
+  if (!state.model) return;
+  if (!$("#key").value.trim()) { status("Enter the MAPI-Key on the start page (Change project or model), then press Update model again.", "err"); return; }
+  const b = $("#updateModel"); b.disabled = true; busy(true);
+  let raw;
+  try { raw = await fetchTables(); progress(null); }
+  catch (e) { progress(null); status("Model not updated: " + e.message, "err"); return; }
+  finally { b.disabled = false; busy(false); }
+  const d = P.diffModels(state.raw, raw), text = P.diffText(d), dlg = $("#revDlg");
+  $("#revText").textContent = text;
+  $("#revSaveOld").textContent = `Save the current version as ${fileBase()}_R${(state.project.revisions || []).length}.json first`;
+  dlg.showModal();
+  const choice = await new Promise(ok => { dlg.onclose = () => ok(dlg.returnValue); });
+  if (choice === "cancel" || !choice) { status("Model not updated.", ""); return; }
+  if (choice === "saveold" && !(await saveProject(true, true, `${fileBase()}_R${(state.project.revisions || []).length}.json`))) { status("Model not updated: the current version was not saved.", "err"); return; }
+  raw.REBAR_USER = state.raw.REBAR_USER || {};
+  state.project.midasReadAt = new Date().toISOString();
+  (state.project.revisions ||= []).push({ at: state.project.midasReadAt, summary: text });
+  setModel(raw, "MIDAS Gen NX", false); // rebuild() reports edits that lost or changed their type
+  const off = offGridColumns(), notes = [state.rebarNote, off ? `${off} column(s) are not on the manual grid lines; check the grid.` : ""].filter(Boolean).join(" ");
+  setDirty(true);
+  status(`Model updated: ${text}.` + (notes ? " " + notes : " Save to keep the revision in the file."), notes ? "err" : "ok");
+}
+// columns whose position is off every manual grid line (more than the merge tolerance); auto grids follow the columns anyway
+function offGridColumns() {
+  if ($("#gridMode").value !== "manual" || !state.grids) return 0;
+  const tol = Math.max(1, +$("#tol").value || 100) / 1000, m = state.model, near = (v, ls) => ls.some(l => Math.abs(+l.v - v) <= tol);
+  let n = 0;
+  for (const e of m.elems) if (e.kind === "column") { const a = m.nodes.get(e.nodes[0]); if (a && !(near(a.x, state.grids.x) && near(a.y, state.grids.y))) n++; }
+  return n;
+}
 
 // ---------- wiring ----------
 function init() {
   loadSettings();
   setupStart();
   $("#startForm").onsubmit = e => { e.preventDefault(); takeProject(); loadFromMidas(); };
-  $("#demo").onclick = () => { takeProject("Demo building"); setModel(demoModel(), "Demo model"); };
-  $("#openJson").onclick = () => { takeProject(); $("#fileJson").click(); };
-  $("#fileJson").onchange = async e => {
-    const f = e.target.files[0]; if (!f) return;
-    try { setModel(JSON.parse(await f.text()), f.name); } catch (err) { status(`Could not read ${f.name}: ${err.message}. Open a model JSON saved from this app or a Gen NX database (DBG) export.`, "err"); }
-    e.target.value = "";
-  };
+  $("#demo").onclick = () => { takeProject("Demo building"); openProject({ raw: demoModel(), project: null, settings: null }, "Demo model"); };
+  $("#openJson").onclick = () => { takeProject(); openFile(); };
+  $("#fileJson").onchange = async e => { const f = e.target.files[0]; if (f) await openFromFile(f); e.target.value = ""; };
   $("#showKey").onclick = e => { const k = $("#key"), show = k.type === "password"; k.type = show ? "text" : "password"; e.currentTarget.setAttribute("aria-pressed", show); e.currentTarget.textContent = show ? "Hide" : "Show"; e.currentTarget.setAttribute("aria-label", show ? "Hide key" : "Show key"); };
   // tabs: arrow keys move between them (the sidebar lists them top to bottom), one tab stop for the group
   $(".tabs").addEventListener("keydown", e => {
@@ -560,17 +719,23 @@ function init() {
     if (i < 0 || j === undefined) return;
     e.preventDefault(); const t = tabs[(j + tabs.length) % tabs.length]; t.focus(); t.click();
   });
-  for (const id of ["colorMode", "labels", "tol", "gridMode", "project", "fontMm", "slabT", "beamTop", "markNoRebar", "gridAlpha"]) $("#" + id).addEventListener("change", rebuild);
+  for (const id of ["colorMode", "labels", "tol", "gridMode", "project", "fontMm", "slabT", "beamTop", "markNoRebar", "gridAlpha"]) $("#" + id).addEventListener("change", () => { rebuild(); setDirty(true); });
   $("#gridAlpha").addEventListener("input", () => { $("#gridAlphaV").textContent = `${$("#gridAlpha").value}%`; });
-  $("#applyGrid").onclick = () => { readGridTables(); rebuild(); };
+  $("#applyGrid").onclick = () => { readGridTables(); rebuild(); setDirty(true); };
   setupGridTables();
   $("#copyGrid").onclick = () => {
     if (!state.model) return;
     const auto = C.autoGrids(state.model, Math.max(1, +$("#tol").value || 100) / 1000);
     $("#gridX").value = C.gridToText(auto.x); $("#gridY").value = C.gridToText(auto.y);
-    $("#gridMode").value = "manual"; fillGridTables(); rebuild();
+    $("#gridMode").value = "manual"; fillGridTables(); rebuild(); setDirty(true);
   };
-  for (const id of ["remember", "base", "conn", "dxfUnits", "scope"]) $("#" + id).addEventListener("change", () => { state.connMode = null; saveSettings(); });
+  for (const id of ["remember", "base", "conn", "dxfUnits", "scope"]) $("#" + id).addEventListener("change", () => { state.connMode = null; saveSettings(); if (id === "dxfUnits" || id === "scope") setDirty(true); });
+  $("#saveProj").onclick = () => saveProject(false);
+  $("#saveAs").onclick = () => saveProject(true);
+  $("#updateModel").onclick = updateFromMidas;
+  // Ctrl+S saves the project (to its file in Chrome/Edge), Ctrl+Shift+S asks for a new file
+  addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (state.model) saveProject(e.shiftKey); } });
+  addEventListener("beforeunload", e => { if (state.dirty) { autosaveNow(); e.preventDefault(); e.returnValue = ""; } });
   $("#viewType").onchange = () => { state.currentId = null; fillViewSel(); drawCurrent(); };
   $("#groupBar").onclick = e => { const b = e.target.closest("button[data-g]"); if (!b) return; const g = state.groups[+b.dataset.g]; if (!g) return; state.currentId = g[1][0].id; renderViewList(); drawCurrent(); }; // first sheet of that type
   $("#viewSel").onchange = e => { state.currentId = e.target.value; drawCurrent(); };
@@ -592,8 +757,9 @@ function init() {
   $("#tabShop").onclick = () => show2d("shop");
   setupShop();
   setupTooltip();
-  $("#sheet").innerHTML = '<div class="empty start"><h2>No model loaded yet</h2><p>Load the model open in Gen NX with your MAPI-Key, open a saved model JSON, or look around with the demo model.</p>' +
-    '<div class="row"><button type="button" class="primary" data-go="demo">Try the demo model</button><button type="button" data-go="openJson">Open JSON…</button></div></div>';
+  $("#logout").hidden = !/(^|;\s*)gnx_login=1/.test(document.cookie); // shown when the site asks for a password (auth.mjs)
+  $("#sheet").innerHTML = '<div class="empty start"><h2>No model loaded yet</h2><p>Load the model open in Gen NX with your MAPI-Key, open a saved project, or look around with the demo model.</p>' +
+    '<div class="row"><button type="button" class="primary" data-go="demo">Try the demo model</button><button type="button" data-go="openJson">Open project…</button></div></div>';
   $("#sheet").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b) $("#" + b.dataset.go).click(); });
 }
 // ---------- start page: project name and MAPI-Key first ----------
@@ -607,10 +773,18 @@ function setupStart() {
   $("#appVersion").textContent = VERSION;
   $("#startProject").value = $("#project").value;
   $("#project").addEventListener("change", () => { $("#startProject").value = $("#project").value; });
-  const toStart = e => { e?.preventDefault(); if (!state.model) return; $("#startProject").value = $("#project").value; document.body.classList.add("on-start"); $("#startProject").focus(); };
+  const toStart = e => { e?.preventDefault(); if (!state.model) return; if (state.dirty) autosaveNow(); $("#startProject").value = $("#project").value; document.body.classList.add("on-start"); renderRecent(); $("#startProject").focus(); };
   $("#changeModel").onclick = toStart;
   document.querySelector("[data-go-start]").onclick = toStart;
   $("#backToWork").onclick = () => { takeProject(); rebuild(); document.body.classList.remove("on-start"); };
+  renderRecent();
+  $("#recentList").addEventListener("click", async e => {
+    const o = e.target.closest("[data-open]"), f = e.target.closest("[data-forget]");
+    if (o) openRecent(o.dataset.open, false);
+    if (f) { await P.delRecent(f.dataset.forget); renderRecent(); }
+  });
+  $("#restoreYes").onclick = () => openRecent($("#restoreBar").dataset.id, true);
+  $("#restoreNo").onclick = async () => { const r = await P.getRecent($("#restoreBar").dataset.id); if (r) await P.putRecent({ ...r, unsaved: false, data: r.saved || r.data }); renderRecent(); };
   $("#logBody").innerHTML = CHANGELOG.map(v => `<section><h3>Version ${esc(v.version)}</h3><p class="who">${esc(v.date)} · requested by ${esc(v.by)} · edited by ${esc(v.editor)}</p><ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join("")}</ul></section>`).join("");
   $("#openLog").onclick = () => $("#logDlg").showModal();
   $("#closeLog").onclick = () => $("#logDlg").close();

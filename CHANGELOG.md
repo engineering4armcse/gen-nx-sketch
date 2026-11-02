@@ -2,6 +2,23 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.22 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Merged in Kevin's versions 3.3 to 3.3.2 (made in parallel from 3.2): project files, recent projects, model revisions, login, and the items below.
+- Save project (Ctrl+S) and Save as (Ctrl+Shift+S) replace Model JSON. The project file holds the Gen NX tables, the rebar edits and now also the project settings: project name, manual grid, grid tolerance, display, text size, slab thickness, beam top, red marks, DXF units. The MAPI-Key is never saved in it.
+- Chrome and Edge write to the chosen file: the first save asks where, the next Ctrl+S overwrites the same file. Other browsers download the file. If the file was changed on disk after it was opened, Save asks before overwriting.
+- Open project opens a project file, an old Model JSON (it becomes a project on the next save) or a Gen NX database export. A project file brings back all its settings.
+- Start page: Recent projects (last 10, kept in this browser) open the file again, or the copy kept in the browser when the file cannot be read. A banner offers to restore changes that were not saved when the tab closed (autosave 2 s after each change).
+- The model chip and the tab title show a dot while the project has unsaved changes; closing the tab then asks first.
+- Update model from Gen NX: reads the model again for the open project, shows what changed (elements, nodes, sections, stories, Gen NX rebar), offers to save the current version first (_R0, _R1 ...), keeps the settings and rebar edits, lists edits whose section is gone, types whose rebar Gen NX also changed and columns off the manual grid, and records the revision in the file.
+- Rebar edits follow the Gen NX arrangement they were made on, not only its position in the section, so a revision that adds or drops an arrangement does not move an edit to another type. Edits are kept per project (no longer shared between projects with the same section names).
+- Login: set APP_PASSWORD on Netlify (or when starting node server.mjs) and the site asks for the password before the app and the MIDAS proxy; the login lasts 30 days on that device, Log out in the header. Works on phones.
+- Netlify: netlify.toml now also deploys the password gate (netlify/edge-functions/auth.js).
+- Login page uses the app's colours and font: ink-black background, yellow Log in button, Geist, same layout as the start page (was white with a red button).
+- Start page: Open project is a large main button right under Load model from Gen NX (was a small link at the bottom).
+
 ## 3.21 (2026-11-02)
 
 Requested by Arnold · edited by Claude
