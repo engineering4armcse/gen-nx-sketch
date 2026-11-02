@@ -289,24 +289,38 @@ body.is3d .pick,body.is3d #scope{visibility:hidden}
 body.is3d :is([data-export=pdf],[data-export=dxf]){display:none}
 /* rebar editing: only on the Rebar detail tab */
 body:not(.tab-rebar) aside .rebar-only{display:none!important}
-
-/* 3.3 project: restore banner, recent projects, revision dialog */
-.restore{margin-top:14px;padding:12px;border:1px solid var(--accent);border-radius:var(--r);font-size:13.5px}
-.restore p{margin:0 0 8px}
-.recent{margin-top:18px}
-.recent h2{font-size:13px;font-weight:600;margin:0 0 6px;color:var(--frame-text-2)}
-.recent ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
-.recent li{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name x" "info x";column-gap:8px;padding:6px 0;border-top:1px solid var(--frame-2)}
-.recent li .link{grid-area:name;text-align:left;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.recent li .muted{grid-area:info;font-size:12px;overflow-wrap:anywhere}
-.recent li .x{grid-area:x;align-self:center;min-width:32px}
-#revDlg{max-width:min(560px,calc(100vw - 32px))}
-#revDlg form{padding:16px 20px 20px}
-.revtext{font-size:14px;line-height:1.5;overflow-wrap:anywhere}
-.revbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.logout{font-size:12.5px;color:var(--frame-text-2);margin-left:12px;white-space:nowrap}
-.logout:hover{color:var(--frame-text)}
-.chip.dirty::before{border-radius:50%;background:var(--frame-text)}
-.revbtns button{width:auto;flex:1 1 auto;margin:0}
-/* Open project: the second main action on the start page, right under Load model from Gen NX */
-#start .open-proj{margin-top:10px}
+/* ---------- Shop drawing: bar bending schedule ---------- */
+#paneShop{gap:10px}
+.bbs-bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:var(--panel);border-radius:var(--r);padding:8px 10px}
+.bbs-bar .seg button.on{background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
+.bbs-bar input[type=search]{width:160px;margin:0;height:34px}
+.bbs-bar label{display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--ink-2)}
+.bbs-bar label input{width:62px;margin:0;height:34px;text-align:right}
+.bbs-bar label i{font-style:normal}
+.bbs-bar #bbsCsv{margin-left:auto;width:auto;padding:0 14px}
+.bbs-body{flex:1;min-height:0;overflow:auto;background:var(--panel);border-radius:var(--r);padding:14px 16px}
+.bbs-sum{display:flex;flex-wrap:wrap;gap:8px 24px;margin:0 0 14px;color:var(--ink-2)}
+.bbs-sum b{color:var(--ink);font-size:18px;font-weight:600;margin-right:4px}
+.bbs-type{margin:0 0 18px}
+.bbs-type h3{margin:0 0 6px;font-size:15px;font-weight:600;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.bbs-type h3 span{font-weight:400;font-size:13px;color:var(--ink-2)}
+.bbs-type h3 b{color:var(--ink)}
+table.bbs{border-collapse:collapse;width:100%;font-size:12.5px}
+table.bbs th{text-align:left;font-weight:600;color:var(--ink-2);background:var(--tone);position:sticky;top:-14px;z-index:var(--z-sticky)}
+table.bbs th,table.bbs td{padding:5px 8px;border-bottom:1px solid var(--tone);white-space:nowrap}
+.bbs-type table.bbs td:nth-child(4){white-space:normal;min-width:200px;width:40%}
+table.bbs .n{text-align:right}
+table.bbs tfoot td{font-weight:600;border-top:1px solid var(--line)}
+table.bbs .shape{display:flex;align-items:center;gap:6px}
+table.bbs .shape svg{width:44px;height:18px;flex:none;fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+table.bbs .shape span{color:var(--ink-2);font-size:12px}
+@media (max-width:1400px){table.bbs .shape span{display:none}}
+.bbs-note{color:var(--ink-2);font-size:12.5px;max-width:900px;margin:10px 0 0;text-wrap:pretty}
+.bbs-bar label input#bbsFc{width:68px}
+input[type=range]{accent-color:var(--accent);width:100%}
+.gbar{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line,#dfe3e8);padding-bottom:8px}
+.gbar button{background:transparent;border:1px solid transparent;border-radius:var(--r);padding:5px 10px;font-weight:500;color:inherit;opacity:.75;cursor:pointer}
+.gbar button:hover{opacity:1;background:rgba(0,0,0,.04)}
+.gbar button.on{opacity:1;background:var(--accent-soft);border-color:var(--accent);font-weight:600}
+.gbar .n{margin-left:6px;font-size:.85em;opacity:.6}
+.toolbar #viewType{display:none}

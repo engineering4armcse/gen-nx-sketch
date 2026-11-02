@@ -62,7 +62,8 @@ function parseSect(id, s, f) {
     }
   }
   if (dims) { h = dims[0]; b = round ? h : dims[1] > 0 ? dims[1] : h; }
-  return { id, name, shape, round, h, b, dims, off, poly };
+  const desig = String(s.SECT_BEFORE?.SECT_I?.SECT_NAME || "").trim(); // DB catalogue designation, as Gen NX lists it
+  return { id, name, shape, round, h, b, dims, off, poly, desig };
 }
 
 export function normalizeModel(raw) {
@@ -274,7 +275,8 @@ export function sectionInfo(model) {
   for (const e of model.elems) {
     if (!out.has(e.sectName)) {
       const s = model.sects.get(e.sect), mm = v => Math.round(v * 1000);
-      const size = e.t ? `t = ${mm(e.t)}` : s?.h ? (s.round ? `Ø${mm(s.h)}` : `${mm(s.b || s.h)} x ${mm(s.h)}`) : "";
+      // size as Gen NX gives the section type: the DB designation (H 350x175x7/11), else shape and plates (□ 300x300x9/14), else B x H
+      const size = e.t ? `t = ${mm(e.t)}` : s?.desig || (s?.dims && !["SB", "SR", ""].includes(s.shape) ? sectDesc(s) : "") || (s?.h ? (s.round ? `Ø${mm(s.h)}` : `${mm(s.b || s.h)} x ${mm(s.h)}`) : "");
       out.set(e.sectName, { size, desc: sectDesc(s, e.t), matl: "" }); mats.set(e.sectName, new Map());
     }
     const m = mats.get(e.sectName); if (e.matl) m.set(e.matl, (m.get(e.matl) || 0) + 1);
@@ -298,9 +300,9 @@ const MONO = {
 //   (and the transfer column half), SS00H2 solid fill of columns and walls that continue; texts on TEXT xxx.
 //   Rebar schedules: concrete on 3, stirrups and ties on 4, bars on REBAR, dimensions on DIM, table lines on 7, values on TG.
 export const STD_LAYERS = {
-  "SS00GG": [8, "DASHDOT2"], "GRID BULLET": [1], "SS00D3": [1], "SS00G1": [95], "SS00G2": [2], "AS BALOK": [2], "SS00G3": [7], "SS00G4": [5],
+  "SS00GG": [8, "DASHED"], "GRID BULLET": [1], "SS00D3": [1], "SS00G1": [95], "SS00G2": [2], "AS BALOK": [2], "SS00G3": [7], "SS00G4": [5],
   "SS00G5": [4], "SS00G6": [3], "SS00H1": [9], "SS00H2": [13],
-  "TEXT JUDUL": [4], "TEXT SKALA": [7], "TEXT KOLOM": [6], "TEXT GIRDER": [7], "TEXT BEAM": [2], "TEXT WALL": [6], "TEXT SLAB": [7], "TEXT UMUM": [7], "TEXT TABEL DIMENSI": [2],
+  "TEXT JUDUL": [4], "TEXT SKALA": [7], "TEXT KOLOM": [6], "TEXT GIRDER": [7], "TEXT BEAM": [2], "TEXT WALL": [6], "TEXT SLAB": [7], "TEXT UMUM": [7], "TEXT TABEL DIMENSI": [2], "TEXT REBAR": [7], "TEXT REBAR KHUSUS": [6],
   "DIM": [1], "REBAR": [7], "KOLOM BAWAH": [1], "A-HATCH": [7], "1": [1], "3": [3], "4": [4], "6": [6], "7": [7], "TG": [7], "TB": [4],
 };
 const LABEL_LAYER = { column: "TEXT KOLOM", wall: "TEXT WALL", slab: "TEXT SLAB", beam: "TEXT BEAM", brace: "TEXT BEAM" };
@@ -323,7 +325,11 @@ function styleFor(e, opts, colors) {
   return { layer, ...MONO[e.kind], aci: null, sect: e.sectName };
 }
 
-const GRID_C = "#9aa0a6"; // grid lines: thin grey
+const GRID_C = "#9aa0a6"; // grid bubbles: thin grey
+// grid lines: thin even dashes, their strength (0.1 faint .. 1 full) set from Drawing > Grid line strength
+let gridAlpha = 0.6;
+export const setGridAlpha = a => { gridAlpha = Math.min(1, Math.max(0.05, +a || 0.6)); };
+const gridSt = () => ({ layer: "SS00GG", color: mix("#4a5058", 1 - gridAlpha), lw: 0.13, dash: "grid" });
 
 // Shared helpers that add drafting items in world coordinates. k = metres per paper millimetre.
 // Grid bubbles too close for one row are staggered: each value gets the first row (0, 1, 2) whose last bubble is at least gap away.
@@ -347,7 +353,7 @@ export function adders(items, k, fs = 1, { dim = "SS00D3" } = {}) {
     // Outer part of grid lines vs, straight from near (just outside the drawing) to their bubbles beyond at; out = +1/-1, dir 'h' = row along x.
     // Close grids are staggered: every other line runs one bubble further out (CAD style).
     bubbles(vs, labels, near, at, dir, out) {
-      const P = (u, w) => (dir === "h" ? [u, w] : [w, u]), gap = 7.2 * k, rows = bubbleRows(vs, gap), gst = { layer: "SS00GG", color: GRID_C, lw: 0.13 };
+      const P = (u, w) => (dir === "h" ? [u, w] : [w, u]), gap = 7.2 * k, rows = bubbleRows(vs, gap), gst = gridSt();
       vs.forEach((v, i) => {
         const end = at + out * rows[i] * gap;
         A.line(P(v, near), P(v, end), gst);
@@ -386,6 +392,10 @@ export function adders(items, k, fs = 1, { dim = "SS00D3" } = {}) {
 export const tagOf = (model, e) => model.typeOf?.get(e.id) ?? e.sectName;
 // Concrete beams with no rebar detail yet (model.noRebar, element ids, set by the app) are marked in plans and elevations:
 // a red label (colour 1 in the DXF) over a light red band (screen and PDF only). bare(): 1 when any element of the run lacks rebar.
+const RP_ODD = "#c000c0"; // ACI 6: a bar size other than the plan's usual one
+// one colour per bar size on the beam rebar plans (screen colour, ACI); the main size stays black
+const BAR_COLORS = { D10: ["#007f7f", 4], D13: ["#007f7f", 4], D16: ["#009900", 3], D19: ["#0000ff", 5], D22: ["#c000c0", 6], D25: ["#e00000", 1], D29: ["#d07000", 30], D32: ["#7a3cc0", 190], D36: ["#8a6a00", 40] };
+export const barColor = b => BAR_COLORS[b] || [RP_ODD, 6];
 export const NO_REBAR = { band: "#f6c4be", text: { color: "#d0281c", aci: 1 }, note: n => `RED: BEAM WITHOUT REBAR DETAIL (${n})` };
 const bare = (model, m, opts) => (opts.markNoRebar !== false && m.kind === "beam" && (m.ids || [m.id]).some(id => model.noRebar?.has(id)) ? 1 : 0);
 
@@ -394,6 +404,14 @@ function textRot(dx, dy) {
   if (a > 90.01) a -= 180;
   if (a <= -89.99) a += 180;
   return a;
+}
+
+// Plan directions of a column's local z and y axes (Gen NX β). A column drawn top to bottom (i node above j) has its local x
+// pointing down, so β turns the other way and y flips: z = (cos β, -sin β), y = (sin β, cos β); as in the 3D view.
+export function colAxes(model, e) {
+  const r = ((e.angle || 0) * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+  const down = model.nodes.get(e.nodes[0]).z > model.nodes.get(e.nodes[1]).z + 1e-6;
+  return down ? [[c, -s], [s, c]] : [[c, s], [s, -c]];
 }
 
 // Join collinear segments of the same section into one run = one line = one label.
@@ -555,11 +573,13 @@ export function buildPlan(model, opts, level, mode = "beam") {
   const tol = opts.levelTol ?? 0.05, colors = opts.colors, grids = opts.grids;
   const N = id => model.nodes.get(id);
   const atL = id => Math.abs(N(id).z - level.z) <= tol;
-  // Beams not lying on any level (rafters) show, projected, on the first level at or above their top end.
+  // Sloped beams not lying on any level (rafters) show, projected, on the first level at or above their top end.
+  // Level beams between stories (landings, bordes) have plans of their own (see offLevels), so they never stack on the story above.
   const zr = e => e.nodes.map(id => N(id).z);
   const homeLevel = e => { const top = Math.max(...zr(e)); return (opts.levels || []).find(l => l.z >= top - tol); };
+  const flat = e => { const z = zr(e); return Math.max(...z) - Math.min(...z) <= tol; };
   const beams = !proj ? [] : model.elems.filter(e => e.kind === "beam" && (e.nodes.every(atL) ||
-    (!(opts.levels || []).some(l => zr(e).every(z => Math.abs(z - l.z) <= tol)) && homeLevel(e)?.z === level.z)));
+    (!level.off && !flat(e) && !(opts.levels || []).some(l => zr(e).every(z => Math.abs(z - l.z) <= tol)) && homeLevel(e)?.z === level.z)));
   const slabs = !proj ? [] : model.elems.filter(e => e.kind === "slab" && e.nodes.every(atL));
   const touches = e => { const zs = e.nodes.map(id => N(id).z); return Math.min(...zs) - tol <= level.z && Math.max(...zs) + tol >= level.z; };
   const vert = model.elems.filter(e => (e.kind === "column" || e.kind === "wall") && touches(e));
@@ -571,9 +591,10 @@ export function buildPlan(model, opts, level, mode = "beam") {
   })());
   const rising = vert.filter(e => Math.abs(Math.min(...e.nodes.map(id => N(id).z)) - level.z) <= tol && Math.max(...e.nodes.map(id => N(id).z)) > level.z + tol);
   // a column or wall below continues above this level when something vertical starts on its top node
-  const bottoms = new Set();
-  for (const e of model.elems) if (e.kind === "column" || e.kind === "wall") { const zb = Math.min(...zr(e)); for (const id of e.nodes) if (N(id).z <= zb + tol) bottoms.add(id); }
-  const contAbove = e => e.nodes.some(id => atL(id) && bottoms.has(id));
+  // (node -> what starts there). A concrete column under a steel one counts as stopping: it is shown as an empty box under the H
+  const bottoms = new Map(), steel = e => e.matlType === "STEEL" || (!e.matlType && isSteel(model.sects.get(e.sect)));
+  for (const e of model.elems) if (e.kind === "column" || e.kind === "wall") { const zb = Math.min(...zr(e)); for (const id of e.nodes) if (N(id).z <= zb + tol) (bottoms.get(id) || bottoms.set(id, []).get(id)).push(e); }
+  const contAbove = e => e.nodes.some(id => atL(id) && (bottoms.get(id) || []).some(u => steel(u) === steel(e)));
   // column plan: the columns/walls rising from here, plus those from below that stop here (outline only, no label)
   const stops = new Set(below.filter(e => !contAbove(e)));
   if (!proj && !rising.length) return null; // a column plan needs something rising from this level
@@ -589,7 +610,7 @@ export function buildPlan(model, opts, level, mode = "beam") {
 
   // grids
   const gx0 = ext.x0 - 22 * k, gx1 = ext.x1 + 22 * k, gy0 = ext.y0 - 22 * k, gy1 = ext.y1 + 22 * k;
-  const gst = { layer: "SS00GG", color: GRID_C, lw: 0.13 };
+  const gst = gridSt();
   const nx0 = ext.x0 - 2 * k, nx1 = ext.x1 + 2 * k, ny0 = ext.y0 - 2 * k, ny1 = ext.y1 + 2 * k; // grid lines jog just outside the drawing
   for (const g of grids.x) A.line([g.v, ny0], [g.v, ny1], gst);
   for (const g of grids.y) A.line([nx0, g.v], [nx1, g.v], gst);
@@ -617,8 +638,8 @@ export function buildPlan(model, opts, level, mode = "beam") {
     }
     const sec = model.sects.get(e.sect) || {}, p = N(e.nodes[0]);
     const H = Math.max(sec.h || 0.3, 1.2 * k), B = Math.max(sec.b || sec.h || 0.3, 1.2 * k);
-    // same local axes as the 3D view: section height (w) along local z = (cos β, sin β), width (u) along local y = (sin β, -cos β)
-    const a = (e.angle * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), toPlan = l => l.map(([u, w]) => [p.x + w * c + u * s, p.y + w * s - u * c]);
+    // same local axes as the 3D view: section height (w) along local z, width (u) along local y
+    const [zv, yv] = colAxes(model, e), toPlan = l => l.map(([u, w]) => [p.x + w * zv[0] + u * yv[0], p.y + w * zv[1] + u * yv[1]]);
     const outl = sec.h ? sectionOutline(sec) : null; // the real shape (H, T, C, pipe…) even when small; a block only when the shape is unknown
     return outl ? outl.map(o => ({ pts: toPlan(o.pts), holes: o.holes.map(toPlan) }))
       : [{ pts: sec.round ? Array.from({ length: 24 }, (_, i) => [p.x + (H / 2) * Math.cos((i * Math.PI) / 12), p.y + (H / 2) * Math.sin((i * Math.PI) / 12)]) : toPlan([[-B / 2, -H / 2], [B / 2, -H / 2], [B / 2, H / 2], [-B / 2, H / 2]]), holes: [] }];
@@ -654,7 +675,94 @@ export function buildPlan(model, opts, level, mode = "beam") {
   for (const e of beams) count(e);
   const runs = mergeRuns(beams, model, degree);
   const edges = beamEdges(runs, verts, model, k, e => vertParts(e).map(p => p.pts));
-  for (const m of runs) {
+  // beam rebar plan (opts.rebarPlan from rebar.js): single lines, type name above, the bars below; a bar size other than
+  // the plan's usual one is written out and coloured
+  const rp = opts.rebarPlan, rpStd = rp?.common(runs);
+  const rpDir = m => (Math.abs(m.b.x - m.a.x) >= Math.abs(m.b.y - m.a.y) ? "X" : "Y");
+  if (rp) for (const m of runs.filter(m => rpDir(m) !== rp.dir)) A.line([m.a.x, m.a.y], [m.b.x, m.b.y], { layer: "AS BALOK", color: "#b4b9c0", lw: 0.13 }); // the other direction, for reference
+  // labels are collected first, then placed midspan groups first, each pushed further from its line while it hits one already placed
+  const rpLabels = [], rpUsed = new Set();
+  if (rp) for (const m of runs.filter(m => rpDir(m) === rp.dir)) {
+    const t = tip(m, ` · L=${m.L.toFixed(3)} m`), el = m.ids.join(","), miss = bare(model, m, opts); noRebar += miss;
+    A.line([m.a.x, m.a.y], [m.b.x, m.b.y], { layer: "AS BALOK", color: "#000000", lw: 0.3, tip: t, el });
+    const r = textRot(m.b.x - m.a.x, m.b.y - m.a.y), a = (r * Math.PI) / 180, off = 0.8 * k;
+    // midspan: type then the midspan text above the line, the other below; near each end the support values
+    const L2 = Math.hypot(m.b.x - m.a.x, m.b.y - m.a.y) || 1, ux = (m.b.x - m.a.x) / L2, uy = (m.b.y - m.a.y) / L2;
+    const flip = Math.cos(a) * ux + Math.sin(a) * uy < 0; // text reads the other way
+    const at = (u, d) => [m.a.x + ux * u - Math.sin(a) * d, m.a.y + uy * u + Math.cos(a) * d], lines = rp.text(m, rpStd);
+    const odd = { layer: "TEXT REBAR KHUSUS", color: RP_ODD, aci: 6 }, std = { layer: "TEXT REBAR", color: "#000000", aci: 7 };
+    const face = (p, sgn) => { let f = 0; for (const e of verts) for (const part of vertParts(e)) { const inside = part.pts.some(q => Math.hypot(q[0] - p.x, q[1] - p.y) < 2) && e.nodes.some(id => Math.hypot(N(id).x - p.x, N(id).y - p.y) < 0.05);
+      if (inside) for (const q of part.pts) f = Math.max(f, sgn * ((q[0] - p.x) * ux + (q[1] - p.y) * uy)); } return f; };
+    // text size: 1.8 mm, smaller on a short beam so the text stays within it (down to 1.2 mm); room = the clear span
+    const room = Math.max(L2 - face(m.a, 1) - face(m.b, -1), 0.3 * L2) / k, fit = (parts, share) => Math.max(1.2, Math.min(1.8, (share * room) / (0.82 * (opts.fontScale || 1) * Math.max(...parts.map(q => q.s.length), 1))));
+    const grp = { m, u0: face(m.a, 1), u1: L2 - face(m.b, -1) }; // the midspan pair slides along the clear span together
+    const label = (prio, u, side, align, parts, h) => { parts = parts.filter(q => q.s); rpLabels.push({ prio, at, u, side, off, r, a, align, parts, h: h || fit(parts, prio ? 0.42 : 0.92), grp, slide: !prio }); };
+    const name = { s: tagOf(model, m), st: { ...(miss ? NO_REBAR.text : { layer: "TEXT BEAM", color: "#000000" }), bold: true, font: "ROMAND" } };
+    const mt = lines?.mid?.[0], mb = lines?.mid?.[1];
+    // a piece too short for its text (e.g. inside a column) is left bare when the piece next to it in line reads the same
+    const sig = o => tagOf(model, o) + JSON.stringify(rp.text(o, rpStd)?.mid?.map(c => c?.s)), touch = (p, q) => Math.hypot(p.x - q.x, p.y - q.y) < 0.05;
+    if (room < 0.5 * 0.82 * 1.2 * Math.max(tagOf(model, m).length, mt?.s.length || 0, mb?.s.length || 0) &&
+      runs.some(o => o !== m && rpDir(o) === rp.dir && [o.a, o.b].some(p => touch(p, m.a) || touch(p, m.b)) && sig(o) === sig(m))) continue;
+    const cs = c => { if (!c.odd) return { s: c.s, st: std }; const [color, aci] = barColor(c.bar); rpUsed.add(c.bar); return { s: c.s, st: { layer: `TEXT REBAR ${c.bar}`, color, aci } }; };
+    label(0, L2 / 2, 1, "center", mt ? [cs(mt), name] : [name]);
+    if (mb) label(0, L2 / 2, -1, "center", [cs(mb)]);
+    // support values start just clear of the column or wall face at each end, reading away from it
+    const f0 = face(m.a, 1), f1 = face(m.b, -1);
+    if (lines?.ends) [[f0 + 0.8 * k, 0, flip ? "right" : "left"], [L2 - f1 - 0.8 * k, 1, flip ? "left" : "right"]].forEach(([u, i, align]) => {
+      const c = lines.ends[i];
+      if (c[0]) label(1, u, 1, align, [cs(c[0])]);
+      if (c[1]) label(1, u, -1, align, [cs(c[1])]);
+    });
+  }
+  if (rp) {
+    const fs = opts.fontScale || 1, placed = [];
+    // the grid dimension chains (above and left of the drawing) are kept clear too
+    const keep = [...verts.flatMap(e => vertParts(e).map(part => { const X = part.pts.map(q => q[0]), Y = part.pts.map(q => q[1]); return [Math.min(...X), Math.min(...Y), Math.max(...X), Math.max(...Y)]; }))
+      .filter(b => b[2] - b[0] < 2 && b[3] - b[1] < 2), // columns
+      [ext.x0 - 30 * k, ext.y1 + 4 * k, ext.x1 + 30 * k, ext.y1 + 40 * k], [ext.x0 - 40 * k, ext.y0 - 30 * k, ext.x0 - 4 * k, ext.y1 + 30 * k]];
+    const box = (L, d) => { // world bbox of a label group pushed d further out
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const H = L.h * fs * k, GAP = (L.h + 0.8) * fs * k;
+      L.parts.forEach((q, j) => {
+        const w = q.s.length * H * (q.st.bold ? 0.86 : 0.8), fx = L.align === "center" ? 0.5 : (L.align === "right") ? 1 : 0, dd = L.side * (L.off + d + j * GAP);
+        const [px, py] = L.at(L.u, dd), ys = L.side > 0 ? [0, H] : [-H, 0];
+        for (const lx of [-fx * w, (1 - fx) * w]) for (const ly of ys) {
+          const X = px + lx * Math.cos(L.a) - ly * Math.sin(L.a), Y = py + lx * Math.sin(L.a) + ly * Math.cos(L.a);
+          x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y);
+        }
+      });
+      return [x0, y0, x1, y1];
+    };
+    const hit = (p, q) => p[0] < q[2] - 0.2 * k && q[0] < p[2] - 0.2 * k && p[1] < q[3] - 0.2 * k && q[1] < p[3] - 0.2 * k;
+    // a label box crossed by another beam line (Liang-Barsky clip of the segment against the box)
+    const cross = (m, b) => { let t0 = 0, t1 = 1; const dx = m.b.x - m.a.x, dy = m.b.y - m.a.y;
+      for (const [p, q] of [[-dx, m.a.x - b[0]], [dx, b[2] - m.a.x], [-dy, m.a.y - b[1]], [dy, b[3] - m.a.y]]) {
+        if (Math.abs(p) < 1e-12) { if (q < 0) return false; continue; }
+        const t = q / p; if (p < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t); if (t0 > t1) return false; }
+      return true; };
+    const shrink = b => [b[0] + 0.3 * k, b[1] + 0.3 * k, b[2] - 0.3 * k, b[3] - 0.3 * k];
+    for (const L of rpLabels.sort((p, q) => p.prio - q.prio || (p.grp.u1 - p.grp.u0) - (q.grp.u1 - q.grp.u0))) { // short beams first: they have the least room
+      // try spots near the line first: slid along the clear span (midspan labels), then pushed further out step by step;
+      // a stirrup label may also go to the other side of the line (e.g. away from the dimensions)
+      const GAP = (L.h + 0.8) * fs * k, g = L.grp, span = g.u1 - g.u0, hw = 0.45 * L.h * fs * k * Math.max(...L.parts.map(q => q.s.length));
+      const bad = b => placed.filter(p => hit(p, b)).length + 3 * keep.some(p => hit(p, b)) + 0.6 * runs.filter(o => o !== g.m && rpDir(o) === rp.dir && cross(o, shrink(b))).length;
+      const us = !L.slide ? [L.u] : [...new Set([g.u ?? L.u, L.u, ...[0.12, -0.12, 0.24, -0.24, 0.34, -0.34].map(f => L.u + f * span)])];
+      let best = null;
+      // a crowded label may also shrink one step (to 75 %, not below 1.2 mm)
+      const hs = [...new Set([L.h, Math.max(1.2, 0.75 * L.h)])];
+      search: for (let i = 0; i <= 6; i++) for (const h of hs) for (const u of us) for (const side of rp.kind === "main" ? [L.side] : [L.side, -L.side]) {
+        const c = { ...L, side, u, h }, gp = (h + 0.8) * fs * k, b = box(c, i * gp), w = hw * h / L.h;
+        if (u !== L.u && (u - w < g.u0 || u + w > g.u1)) continue; // stays within the clear span
+        const n = bad(b) + (side !== L.side ? 0.5 : 0) + i * 0.25 + (h < L.h ? 0.12 : 0) + Math.abs(u - L.u) / (span || 1) * 0.1;
+        if (!best || n < best.n) best = { n, c, d: i * gp, b };
+        if (n < 0.45) break search; // clear
+      }
+      const { c: P, d, b: bx } = best, PG = (P.h + 0.8) * fs * k; placed.push(bx); if (L.slide && g.u == null) g.u = P.u;
+      if (d > 0.5 * PG) A.line(P.at(P.u, P.side * P.off * 0.5), P.at(P.u, P.side * (P.off + d - 0.3 * k)), { layer: "TEXT REBAR", color: "#9aa0a8", lw: 0.09 }); // leader back to the line
+      P.parts.forEach((q, j) => A.text(P.at(P.u, P.side * (P.off + d + j * PG)), q.s, { ...q.st, size: P.h, align: P.align, valign: P.side > 0 ? "bottom" : "top", rot: P.r }));
+    }
+  }
+  for (const m of rp ? [] : runs) {
     const st = styleFor(m, opts, colors), ed = edges.get(m);
     const t = tip(m, ` · L=${m.L.toFixed(3)} m${m.ids.length > 1 ? ` · ${m.ids.length} elements` : ""}`), el = m.ids.join(",");
     const miss = bare(model, m, opts); noRebar += miss;
@@ -666,12 +774,15 @@ export function buildPlan(model, opts, level, mode = "beam") {
     if (opts.labels) {
       const r = textRot(m.b.x - m.a.x, m.b.y - m.a.y), a = (r * Math.PI) / 180, off = (ed.lines ? ed.w / 2 : 0) + 1 * k;
       // girder: both ends on a column or wall (TEXT GIRDER), otherwise a secondary beam (TEXT BEAM)
-      A.text([(m.a.x + m.b.x) / 2 - Math.sin(a) * off, (m.a.y + m.b.y) / 2 + Math.cos(a) * off], tagOf(model, m), { ...lab(st, "beam"), ...(miss ? NO_REBAR.text : {}), layer: ed.girder ? "TEXT GIRDER" : "TEXT BEAM", align: "center", valign: "bottom", rot: r });
+      // a short beam gets a smaller name (down to 60 %) so it stays within the beam
+      const nm = tagOf(model, m), Lb = Math.hypot(m.b.x - m.a.x, m.b.y - m.a.y), fit = Math.max(0.6, Math.min(1, (0.85 * Lb / k) / (0.82 * nm.length * 2 * (opts.fontScale || 1))));
+      A.text([(m.a.x + m.b.x) / 2 - Math.sin(a) * off, (m.a.y + m.b.y) / 2 + Math.cos(a) * off], nm, { ...lab(st, "beam"), size: 2 * fit, ...(miss ? NO_REBAR.text : {}), layer: ed.girder ? "TEXT GIRDER" : "TEXT BEAM", align: "center", valign: "bottom", rot: r });
     }
   }
 
   const transfer = transferCols(model);
   let anyTransfer = false;
+  const colLabels = [], colBars = new Set();
   for (const e of verts.filter(e => e.kind === "column")) {
     const st = styleFor(e, opts, colors), sec = model.sects.get(e.sect) || {}, tr = transfer.has(e.id);
     const p = N(e.nodes[0]), H = Math.max(sec.h || 0.3, 1.2 * k), B = Math.max(sec.b || sec.h || 0.3, 1.2 * k), parts = vertParts(e);
@@ -688,8 +799,42 @@ export function buildPlan(model, opts, level, mode = "beam") {
       A.poly(part.pts, { ...ost, tip: undefined }); // outline on SS00G5
       for (const hole of part.holes) A.poly(hole, { ...ost, fill: "#ffffff", tip: undefined });
     }
-    if (opts.labels && !proj && !stops.has(e)) A.text([p.x + Math.max(H, B) / 2 + 0.8 * k, p.y + Math.max(H, B) / 2 + 0.8 * k], tagOf(model, e), { ...lab(st, "column"), align: "left", valign: "bottom" });
+    if (opts.labels && !proj && !stops.has(e)) {
+      const rb = model.colRebar?.get(e.id);
+      if (opts.colRebarPlan) { // column rebar plan (Rebar detail tab): name, main bars, ties; placed after all columns, clear of each other
+        const X = parts.flatMap(q => q.pts.map(v => v[0])), Y = parts.flatMap(q => q.pts.map(v => v[1]));
+        const bar = b => { const [color, aci] = barColor(b); colBars.add(b); return { layer: `TEXT REBAR ${b}`, color, aci }; };
+        colLabels.push({ bb: [Math.min(...X), Math.min(...Y), Math.max(...X), Math.max(...Y)], lines: [
+          { s: tagOf(model, e), st: { ...lab(st, "column"), bold: true, font: "ROMAND" }, h: 2 },
+          ...(rb?.main ? [{ s: rb.main, st: bar(rb.mainBar), h: 1.8 }] : []), ...(rb?.tie ? [{ s: rb.tie, st: bar(rb.tieBar), h: 1.8 }] : [])] });
+      } else {
+        const lx = p.x + Math.max(H, B) / 2 + 0.8 * k, ly = p.y + Math.max(H, B) / 2;
+        A.text([lx, ly + 0.8 * k], tagOf(model, e), { ...lab(st, "column"), align: "left", valign: "bottom" });
+      }
+    }
     if (proj || !stops.has(e)) count(e);
+  }
+  if (colLabels.length) { // column rebar plan: each label block tried at the four corners of its column, then pushed out with a leader
+    const fs = opts.fontScale || 1, placed = [], cols = colLabels.map(c => c.bb);
+    const keep = [[ext.x0 - 30 * k, ext.y1 + 4 * k, ext.x1 + 30 * k, ext.y1 + 40 * k], [ext.x0 - 40 * k, ext.y0 - 30 * k, ext.x0 - 4 * k, ext.y1 + 30 * k]];
+    const hit = (p, q) => p[0] < q[2] - 0.2 * k && q[0] < p[2] - 0.2 * k && p[1] < q[3] - 0.2 * k && q[1] < p[3] - 0.2 * k;
+    for (const c of colLabels) {
+      const gap = 0.6 * fs * k, hs = c.lines.map(l => l.h * fs * k), Hb = hs.reduce((a, b) => a + b, 0) + gap * (hs.length - 1);
+      const Wb = Math.max(...c.lines.map((l, i) => l.s.length * hs[i] * (l.st.bold ? 0.86 : 0.8))), [x0, y0, x1, y1] = c.bb, o = 0.8 * k, step = 2.5 * k;
+      let best = null;
+      // corners: right-top (name level with the column top), right-below, left-top, left-below
+      search: for (let i = 0; i <= 6; i++) for (const [j, [sx, sy]] of [[1, 1], [1, -1], [-1, 1], [-1, -1]].entries()) {
+        const ax = sx > 0 ? x1 + o + i * step : x0 - o - i * step, ay = sy > 0 ? y1 + hs[0] + o + i * step : y0 - o - i * step; // block top-left / top-right corner
+        const b = sx > 0 ? [ax, ay - Hb, ax + Wb, ay] : [ax - Wb, ay - Hb, ax, ay];
+        const n = placed.filter(p => hit(p, b)).length + 3 * cols.filter(p => hit(p, b)).length + 3 * keep.some(p => hit(p, b)) + i * 0.3 + j * 0.05;
+        if (!best || n < best.n) best = { n, i, sx, sy, ax, ay, b };
+        if (n < 0.3) break search;
+      }
+      const { i, sx, sy, ax, ay, b } = best; placed.push(b);
+      if (i > 0) A.line([sx > 0 ? x1 : x0, sy > 0 ? y1 : y0], [sx > 0 ? b[0] : b[2], sy > 0 ? b[1] + Hb - hs[0] * 0.5 : b[3] - hs[0] * 0.5], { layer: "TEXT REBAR", color: "#9aa0a8", lw: 0.09 }); // leader from the column corner
+      let y = ay;
+      c.lines.forEach((l, li) => { A.text([ax, y], l.s, { ...l.st, size: l.h, align: sx > 0 ? "left" : "right", valign: "top" }); y -= hs[li] + gap; });
+    }
   }
   if (anyTransfer) { // key in the bottom-left corner, clear of the grid bubbles
     const s = 3 * k, x = gx0 - 10 * k, y = gy0 - 12 * k;
@@ -700,7 +845,7 @@ export function buildPlan(model, opts, level, mode = "beam") {
   }
 
   return {
-    kind: "plan", sub: mode, id: `plan:${mode}:${level.name}`, title: `${proj ? "BEAM" : "COLUMN"} PLAN - ${level.name} (EL. ${fmtEl(level.z)})`, scale, k, items, noRebar,
+    kind: "plan", sub: rp ? "beamplanrebar" : opts.colRebarPlan ? "colplanrebar" : mode, id: `plan:${rp ? "rebar-" + rp.kind + rp.dir : opts.colRebarPlan ? "rebar-col" : mode}:${level.name}${level.off ? ":" + level.z.toFixed(3) : ""}`, title: `${rp ? `BEAM REBAR PLAN (${rp.title}) - ${rp.dir} DIRECTION` : proj ? "BEAM" : opts.colRebarPlan ? "COLUMN REBAR PLAN" : "COLUMN"} - ${level.name} (EL. ${fmtEl(level.z)})`, scale, k, items, noRebar, rebarKind: rp?.kind, notes: colBars.size ? ["COLUMN TYPE (BOLD), MAIN BARS, TIES (END / MIDDLE / END)", ...[...colBars].sort((p, q) => parseFloat(p.slice(1)) - parseFloat(q.slice(1))).map(b => ({ s: `${b} BARS IN THIS COLOUR`, color: barColor(b)[0], aci: barColor(b)[1], swatch: true }))] : rp && rpStd ? [...rp.note(rpStd), ...[...rpUsed].sort((p, q) => parseFloat(p.slice(1)) - parseFloat(q.slice(1))).map(b => ({ s: `${b} BARS IN THIS COLOUR`, color: barColor(b)[0], aci: barColor(b)[1], swatch: true }))] : null,
     legend: [...legend].map(([name, n]) => ({ name, n, ...colors.get(name), ...opts.info?.get(name) })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
   };
 }
@@ -720,7 +865,7 @@ export function buildElevation(model, opts, axis, grid) {
   const scale = pickScale(ext.u1 - ext.u0, ext.z1 - ext.z0, 34);
   const k = scale / 1000, items = [], A = adders(items, k, opts.fontScale || 1);
 
-  const gst = { layer: "SS00GG", color: GRID_C, lw: 0.13 };
+  const gst = gridSt();
   const zb = ext.z0 - 14 * k, zt = ext.z1 + 6 * k;
   const crossIn = cross.filter(g => g.v >= ext.u0 - tol && g.v <= ext.u1 + tol);
   for (const g of crossIn) A.line([g.v, ext.z0 - 1 * k], [g.v, zt], gst);
@@ -768,7 +913,7 @@ export function buildElevation(model, opts, axis, grid) {
     if (!outl || m.kind === "brace") return null;
     const pts = outl.flatMap(o => o.pts), a = m.a, b = m.b, r = (m.angle || 0) * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
     let vs;
-    if (m.kind === "column") vs = pts.map(([u, w]) => (axis === "x" ? w * s - u * c : w * c + u * s));
+    if (m.kind === "column") { const [zv, yv] = colAxes(model, m), j = axis === "x" ? 1 : 0; vs = pts.map(([u, w]) => w * zv[j] + u * yv[j]); }
     else vs = pts.map(([u, w]) => (Math.abs(s) > 0.7 ? u * Math.sign(s) : w * Math.sign(c || 1)));
     const lo = Math.min(...vs), hi = Math.max(...vs);
     if (hi - lo < 1.2 * k) return null;
@@ -803,9 +948,24 @@ export function buildElevation(model, opts, axis, grid) {
   };
 }
 
+// beam plan levels: the stories plus the heights between them that carry level beams
+export const planLevels = (model, opts) => [...opts.levels, ...offLevels(model, opts.levels, opts.levelTol ?? 0.05)].sort((a, b) => a.z - b.z);
+
+// Heights of level beams that sit between the stories (stair landings, bordes, canopies): one beam plan each,
+// named by the stories either side ("1F-2F"); the title adds the elevation.
+export function offLevels(model, levels, tol = 0.05) {
+  const N = id => model.nodes.get(id), zs = [];
+  for (const e of model.elems) if (e.kind === "beam") {
+    const z = e.nodes.map(id => N(id).z);
+    if (Math.max(...z) - Math.min(...z) <= tol && !levels.some(l => Math.abs(l.z - z[0]) <= tol)) zs.push(z[0]);
+  }
+  return cluster(zs, tol).map(z => { const below = [...levels].reverse().find(l => l.z < z); const above = levels.find(l => l.z > z); return { name: [below?.name, above?.name].filter(Boolean).join("-") || fmtEl(z), z, off: true }; });
+}
+
 export function buildViews(model, opts) {
   const views = [];
-  for (const mode of ["column", "beam"]) for (const l of opts.levels) {
+  const beamLevels = planLevels(model, opts);
+  for (const mode of ["column", "beam"]) for (const l of mode === "beam" ? beamLevels : opts.levels) {
     const v = buildPlan(model, opts, l, mode);
     // a beam plan needs beams or slabs, a column plan needs columns or walls
     if (v && v.items.some(i => i.tip && (mode === "column" || !/^(Column|Wall)/m.test(i.tip.split("\n")[1] || "")))) views.push(v);
@@ -841,7 +1001,7 @@ export function drawPaper(view, R, meta = {}) {
   const ox = (A.x0 + A.x1) / 2 - ((e.x0 + e.x1) / 2) / k, oy = (A.y0 + A.y1) / 2 + ((e.y0 + e.y1) / 2) / k;
   const T = ([x, y]) => [ox + x / k, oy - y / k];
   for (const it of view.items) {
-    const st = { color: it.color, fill: it.fill, lw: it.lw, dash: it.dash, tip: it.tip, el: it.el, size: it.h / k, align: it.align, valign: it.valign, rot: it.rot || 0, sect: it.sect };
+    const st = { color: it.color, fill: it.fill, lw: it.lw, dash: it.dash, tip: it.tip, el: it.el, size: it.h / k, align: it.align, valign: it.valign, rot: it.rot || 0, sect: it.sect, bold: it.bold };
     if (it.t === "line") { const [x1, y1] = T(it.a), [x2, y2] = T(it.b); R.line(x1, y1, x2, y2, st); }
     else if (it.t === "poly") R.poly(it.pts.map(T), { ...st, closed: it.closed });
     else if (it.t === "circle") { const [cx, cy] = T(it.c); R.circle(cx, cy, it.r / k, st); }
@@ -858,9 +1018,9 @@ function drawSheet(view, R, meta) {
   R.line(330, 10, 330, 287, ink);
   // legend: a table of every section in the view (type, size, material); colour swatches only in colour-by-section mode
   if (view.legend.length) {
-    const sw = meta.colorMode === "section", cut = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t), rowH = 5.4, X = [330, 362, 388, 410];
+    const sw = meta.colorMode === "section", cut = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t), rowH = 5.4, X = [330, 362, 392, 410]; // cut by width at about 1.2 mm a character (1.8 mm text)
     R.text(334, 15, "LEGEND - SECTIONS", { color: "#000000", size: 2.6, align: "left", valign: "middle" });
-    const y0 = 19, maxRows = Math.floor((222 - y0) / rowH) - 1, rows = view.legend.slice(0, maxRows), more = view.legend.length - rows.length;
+    const y0 = 19, maxRows = Math.floor((222 - (view.notes ? 6 + 4 * view.notes.length : 0) - y0) / rowH) - 1, rows = view.legend.slice(0, maxRows), more = view.legend.length - rows.length;
     const yEnd = y0 + rowH * (rows.length + 1);
     R.line(330, y0, 410, y0, thin); R.line(330, y0 + rowH, 410, y0 + rowH, thin); R.line(330, yEnd, 410, yEnd, thin);
     for (const x of X.slice(1, 3)) R.line(x, y0, x, yEnd, thin);
@@ -868,9 +1028,9 @@ function drawSheet(view, R, meta) {
     rows.forEach((l, i) => {
       const y = y0 + rowH * (i + 1.5), tx = sw ? 337.5 : 331.5;
       if (sw) box(331.5, y - 1.4, 335.5, y + 1.4, { color: l.color, fill: l.color, lw: 0.13 });
-      R.text(tx, y, cut(l.name, sw ? 14 : 16), { color: "#000000", size: 1.8, align: "left", valign: "middle" });
-      R.text(X[1] + 1.5, y, cut(l.size || "-", 14), { color: "#000000", size: 1.8, align: "left", valign: "middle" });
-      R.text(X[2] + 1.5, y, cut(l.matl || "-", 11), { color: "#000000", size: 1.8, align: "left", valign: "middle" });
+      R.text(tx, y, cut(l.name, sw ? 21 : 25), { color: "#000000", size: 1.8, align: "left", valign: "middle" });
+      R.text(X[1] + 1.5, y, cut(l.size || "-", 23), { color: "#000000", size: 1.8, align: "left", valign: "middle" });
+      R.text(X[2] + 1.5, y, cut(l.matl || "-", 12), { color: "#000000", size: 1.8, align: "left", valign: "middle" });
     });
     if (more > 0) R.text(331.5, yEnd + 3, `+${more} more`, { color: "#555555", size: 1.8, align: "left", valign: "middle" });
   }
@@ -879,6 +1039,15 @@ function drawSheet(view, R, meta) {
     box(331.5, y - 1.4, 337.5, y + 1.4, { color: NO_REBAR.band, fill: NO_REBAR.band, lw: 0.13 });
     R.text(339, y, NO_REBAR.note(view.noRebar), { color: NO_REBAR.text.color, size: 1.8, align: "left", valign: "middle" });
   }
+  if (view.notes) { // notes (beam rebar plans) just above the title block
+    const n = view.notes.length, y0 = 222 - 4 * n;
+    R.text(333, y0 - 3, "NOTES", { color: "#000000", size: 2.2, align: "left", valign: "middle" });
+    view.notes.forEach((t, i) => {
+      const y = y0 + 1.5 + i * 4;
+      if (t.swatch) R.poly([[333, y - 1.2], [339, y - 1.2], [339, y + 1.2], [333, y + 1.2]], { color: t.color, fill: t.color, lw: 0.1, closed: true });
+      R.text(t.swatch ? 341 : 333, y, typeof t === "string" ? t : t.s, { color: t.color || "#000000", size: 1.8, align: "left", valign: "middle" });
+    });
+  }
   // title block
   R.line(330, 225, 410, 225, ink);
   const rows = [["PROJECT", meta.project || "-"], ["DRAWING", view.title], ["SCALE (A3)", `1:${view.scale}`], ["DATE", meta.date || ""], ["SOURCE", "MIDAS Gen NX model"]];
@@ -886,7 +1055,11 @@ function drawSheet(view, R, meta) {
     const y = 225 + i * 11.6;
     if (i) R.line(330, y, 410, y, thin);
     R.text(333, y + 3.2, k, { color: "#555555", size: 1.6, align: "left", valign: "middle" });
-    R.text(333, y + 7.8, v.length > 34 ? v.slice(0, 33) + "…" : v, { color: "#000000", size: i === 1 ? 2.3 : 2.4, align: "left", valign: "middle" });
+    if (i === 1 && v.length > 34) { // a long drawing title on two lines, broken at a " - " when there is one
+      const cut = v.lastIndexOf(" - ", 40) > 8 ? v.lastIndexOf(" - ", 40) : 34, l2 = v.slice(cut).replace(/^ - /, "");
+      R.text(333, y + 6.4, v.slice(0, cut), { color: "#000000", size: 2, align: "left", valign: "middle" });
+      R.text(333, y + 9.4, l2.length > 40 ? l2.slice(0, 39) + "…" : l2, { color: "#000000", size: 2, align: "left", valign: "middle" });
+    } else R.text(333, y + 7.8, v.length > 34 ? v.slice(0, 33) + "…" : v, { color: "#000000", size: i === 1 ? 2.3 : 2.4, align: "left", valign: "middle" });
   });
   R.text(15, 284, "Sketch generated from analysis model - centrelines, verify before issue.", { color: "#777777", size: 1.6, align: "left", valign: "bottom" });
 }
@@ -938,8 +1111,9 @@ export function buildDxf(views, { units = "mm", colorMode = "mono" } = {}) {
     items.push({ t: "text", p: [e.x0, e.y0 - 8 * k], s: "%%U" + view.title, h: 3 * k, align: "left", valign: "top", layer: "TEXT JUDUL" });
     items.push({ t: "text", p: [e.x0, e.y0 - 13 * k], s: `SKALA 1 : ${view.scale}`, h: 2 * k, align: "left", valign: "top", layer: "TEXT SKALA" });
     if (view.noRebar) items.push({ t: "text", p: [e.x0, e.y0 - 18 * k], s: NO_REBAR.note(view.noRebar), h: 2 * k, align: "left", valign: "top", layer: "TEXT UMUM", aci: 1 });
-    if (view.legend.length) { // legend table: TYPE | SIZE | MATERIAL
-      const lx = e.x1 + 12 * k, sw = colorMode === "section", rh = 5.4 * k, W = [32, 26, 22].map(w => w * k), xs = [lx, lx + W[0], lx + W[0] + W[1], lx + W[0] + W[1] + W[2]];
+    if (view.notes) view.notes.forEach((t, i) => items.push({ t: "text", p: [e.x0, e.y0 - (24 + 4 * i) * k], s: typeof t === "string" ? t : t.s, h: 2 * k, align: "left", valign: "top", layer: t.swatch ? `TEXT REBAR ${t.s.split(" ")[0]}` : "TEXT UMUM", aci: t.aci }));
+    if (view.legend.length) { // legend table: TYPE | SIZE | MATERIAL, each column as wide as its longest text (ROMANS 2 mm, width 0.8)
+      const lx = e.x1 + 12 * k, sw = colorMode === "section", rh = 5.4 * k, W = [["name", 32], ["size", 26], ["matl", 22]].map(([f, w], i) => Math.max(w, Math.max(...view.legend.map(l => String(l[f] || "-").length)) * 1.7 + (i || !sw ? 3 : 8)) * k), xs = [lx, lx + W[0], lx + W[0] + W[1], lx + W[0] + W[1] + W[2]];
       const top = e.y1 - 4 * k, bot = top - rh * (view.legend.length + 1), tl = { layer: "TEXT UMUM" };
       items.push({ t: "text", p: [lx, e.y1], s: "LEGEND - SECTIONS", h: 2.5 * k, align: "left", valign: "top", layer: "TEXT UMUM" });
       for (const y of [top, top - rh, bot]) items.push({ t: "line", a: [xs[0], y], b: [xs[3], y], ...tl });

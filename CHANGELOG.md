@@ -2,31 +2,145 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
-## 3.3.2 (2026-11-02)
+## 3.21 (2026-11-02)
 
-Requested by Kevin · edited by Claude
+Requested by Arnold · edited by Claude
 
-- Start page: Open project is a large main button right under Load model from Gen NX (was a small link at the bottom).
+- Column schedule: main bars and ties coloured by bar size (as the rebar plans), with the colour legend in the notes.
 
-## 3.3.1 (2026-11-02)
+## 3.20 (2026-11-02)
 
-Requested by Kevin · edited by Claude
+Requested by Arnold · edited by Claude
 
-- Login page uses the app's colours and font: ink-black background, yellow Log in button, Geist, same layout as the start page (was white with a red button).
+- Column rebar plans: main bars and ties coloured by bar size (same colours as the beam rebar plans), with the colour legend in the notes; column type in bold.
+- Column rebar plans: each label is tried at the four corners of its column, clear of other labels, columns and the grid dimensions, and pushed further out with a thin leader to the column when crowded.
 
-## 3.3 (2026-11-02)
+## 3.19 (2026-11-02)
 
-Requested by Kevin · edited by Claude
+Requested by Arnold · edited by Claude
 
-- Save project (Ctrl+S) and Save as (Ctrl+Shift+S) replace Model JSON. The project file holds the Gen NX tables, the rebar edits and now also the project settings: project name, manual grid, grid tolerance, display, text size, slab thickness, beam top, red marks, DXF units. The MAPI-Key is never saved in it.
-- Chrome and Edge write to the chosen file: the first save asks where, the next Ctrl+S overwrites the same file. Other browsers download the file. If the file was changed on disk after it was opened, Save asks before overwriting.
-- Open project opens a project file, an old Model JSON (it becomes a project on the next save) or a Gen NX database export. A project file brings back all its settings.
-- Start page: Recent projects (last 10, kept in this browser) open the file again, or the copy kept in the browser when the file cannot be read. A banner offers to restore changes that were not saved when the tab closed (autosave 2 s after each change).
-- The model chip and the tab title show a dot while the project has unsaved changes; closing the tab then asks first.
-- Update model from Gen NX: reads the model again for the open project, shows what changed (elements, nodes, sections, stories, Gen NX rebar), offers to save the current version first (_R0, _R1 ...), keeps the settings and rebar edits, lists edits whose section is gone, types whose rebar Gen NX also changed and columns off the manual grid, and records the revision in the file.
-- Rebar edits follow the Gen NX arrangement they were made on, not only its position in the section, so a revision that adds or drops an arrangement does not move an edit to another type. Edits are kept per project (no longer shared between projects with the same section names).
-- Login: set APP_PASSWORD on Netlify (or when starting node server.mjs) and the site asks for the password before the app and the MIDAS proxy; the login lasts 30 days on that device, Log out in the header. Works on phones.
-- Netlify: netlify.toml now also deploys the password gate (netlify/edge-functions/auth.js).
+- Fix: the drawing-type buttons above the drawing now switch the type (they stayed on the first one in 3.18).
+
+## 3.18 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Rebar detail tab has its own column plans (Column plans): each column with its main bars and ties under its name. The 2D sketch column plans show the column names only again.
+- Easier navigation: the drawing types of each tab are a row of buttons above the drawing (with the number of sheets), then the sheet list with previous / next. Rebar detail: Column plans, Column schedule & sections, Beam plans: main bars, Beam plans: stirrups, Beam sections. Shop drawing: Column, Beam, Bar bending schedule. Sheet names no longer repeat the drawing type.
+- Output Sketch: file names in the ZIP start with the tab (Sketch - / Rebar - / Shop -).
+
+## 3.17 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Column plans: the main bars and ties of each column (Gen NX column rebar data) are written under its name, e.g. K5-78 / 16D25 / D10-230; ties end / middle / end when the data has them.
+- Column schedule: each run also lists its main bars and ties under type, size and concrete; a change of rebar up the building starts a new run, and positions are only merged when their rebar is the same too.
+
+## 3.16 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Beam rebar plans (main bars and stirrups): a label that would overlap first slides along its own span and may shrink one step (75 %, not below 1.2 mm) before it is pushed away from its line, so labels stay next to their own beam. Shorter beams are labelled first; a label is also kept off the other beam lines of the same direction.
+- Beam plans: on a short beam the type name gets smaller (down to 60 %) so it stays within the beam.
+
+## 3.15 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Grid lines: even dashes (no more long-short dash-dot), on screen, in the PDF and in the DXF (layer SS00GG, linetype DASHED).
+
+## 3.14 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Grid lines are thin dash-dot lines; their strength is set with Drawing > Grid line strength (10-100 %, default 60 %).
+- Beam rebar plans: on a short beam the text gets smaller (down to 1.2 mm) so it fits the clear span; a piece too short for its text (e.g. inside a column) is left bare when the piece next to it reads the same.
+- Plan labels also keep clear of columns and of the grid dimensions; a stirrup label that cannot clear on its own side goes to the other side of the line.
+
+## 3.13 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Stirrup plan: one text per span with the size always written and the spacing at I-end / midspan / J-end, e.g. D10-100/150/100 (D10-100/100/100 when the same along the span); more than 2 legs as legs / 2 in front of the size (3 legs: 1.5D13-100/150/100, 4 legs: 2D13-...). Skin bars below the line. Colour legend reads 'D13 BARS IN THIS COLOUR'.
+
+## 3.12 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Beam rebar plans: support values start just clear of the column or wall face (no longer hidden under the column), reading away from it.
+- Labels that would overlap are pushed further from their line, with a thin leader back to it; midspan labels are placed first.
+- Each bar size other than the main one has its own colour (D16 green, D19 blue, D25 red, D13 cyan, D29 orange, D32 purple), with a colour legend in the notes; in the DXF each size is on its own layer (TEXT REBAR D19 ...).
+
+## 3.11 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Beam rebar plans split by direction: X and Y on separate sheets per level (BEAM REBAR PLAN (MAIN BARS) - X DIRECTION - 2F); beams of the other direction drawn thin grey for reference.
+- Type names in bold (ROMAND in the DXF, bold in PDF and on screen). Support values near the ends only when they differ from midspan; a span with the same bars all along shows the midspan text only.
+- The main bar size is one for the whole project (the most used, e.g. D22) and is never written on the plan, only in the notes: counts only (5 / 3); other sizes written out in magenta (6D25). Same for the stirrup size.
+
+## 3.10 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Beam rebar plans laid out like the office sample: at midspan the type, the midspan top bars above the line and the bottom bars below, with their size (3D22 / 6D22); near each end the support bars, top above and bottom below, as one count of all layers (no +), with the size only when it differs from midspan. Stirrup plan the same: D10-150 at midspan, 100 near the ends, skin bars below. I and J follow the drawing direction.
+
+## 3.9 (2026-11-02)
+
+Requested by Arnold · edited by Claude
+
+- Rebar detail: new Beam rebar plans per level (the stories and the heights between them), in two sets: MAIN BARS (type and top bars above each span, bottom bars below, counts at I-end / midspan / J-end, + for the next layer) and STIRRUPS & SKIN (spacing at I / midspan / J, legs when more than 2, skin bars each side). Beams as single lines, one label per span.
+- Each plan states its usual bar size once in the notes (MAIN BARS D19 UNLESS NOTED, STIRRUPS D10 UNLESS NOTED); any other size is written out (7+2/7/7+2 D22) in magenta, on layer TEXT REBAR KHUSUS in the DXF. Notes sit above the title block (and under the drawing in the DXF).
+
+## 3.8 (2026-10-30)
+
+Requested by Arnold · edited by Claude
+
+- Beam plans: level beams between the stories (stair landings / bordes, canopies) get a plan of their own, named by the stories either side and the elevation (BEAM PLAN - 2F-3F (EL. +9.300)), instead of stacking on the plan of the story above. Sloped beams (rafters) still show on the first story at or above their top.
+
+## 3.7 (2026-10-29)
+
+Requested by Arnold · edited by Claude
+
+- Shop drawing tab now draws the sheets, by the standard detail (STD T-01 to T-11): Beam shop drawings per beam line and level, Column shop drawings per column stack, and Bar bending schedule. Each sheet exports as PDF and DXF (open the DXF in AutoCAD and save as DWG) and goes into Output Sketch.
+- Laps, development and hooked anchorage (ld, ls, ldh) from Table 1.5 (TS-420B) by concrete grade: fc' is read from each member's material name (Fc30, C30, K-300), or set for all in the fc' box.
+- Beam sheet: elevation with column stubs, stirrup zones A = max(0.25 Ln, 2H) with spacing, exploded top and bottom bars with marks and cut lengths, support extras 0.33 Ln, midspan extras, end hooks F + G >= 40db, top splices at midspan and bottom splices outside 2H, web bars by 4.2, grid bubbles, spans, keyplan and BBS (MARK, BENTUK, DIA, PANJANG, JUMLAH, TOTAL, BERAT). Identical lines on other levels share one sheet. Short lines at 1:25, long ones at 1:50 over several sheets with match lines and the BBS on its own sheet.
+- Column sheet: elevation over all stories with levels, beams, Ln, tie zones B = max(b, h, 500, Ho/6) and ties at <= 100 along the laps, exploded main bars (starter 40db with a 15db foot, laps at mid-height, top hook into the beam), section table per type at 1:30 (TABEL PENULANGAN KOLOM), keyplan and BBS.
+- The Bar bending schedule tables and BBS CSV now come from the sheets, so their numbers match the drawings. Each beam line or column stack has a Sheet button that opens its drawing.
+- Long drawing titles wrap to two lines in the title block. Off-grid lines are named from the nearest grid (3 +1625).
+
+## 3.6 (2026-10-29)
+
+Requested by Arnold · edited by Claude
+
+- New tab Shop drawing (after 3D model): bar bending schedule per beam type and per column type, with mark, bar, shape sketch, cutting length, bars per span / column, number of spans / columns, total length and weight.
+- Beams are split into spans between columns, walls or crossing beams; continuous top and bottom bars, support extras (top Ln/3, bottom Ln/4), midspan extras, stirrups by zone (I / midspan / J) and cross ties, skin bars.
+- Columns per story height: main bars lapped above when the column continues, hooked into the beam at the top; hoops with lo end zones and cross ties.
+- Totals per bar size (beams, columns, with waste, number of stock bars). Lap (d), hook (d), stock length and waste are set in the bar; BBS CSV exports every row for Excel.
+- 3D > Sections: ticking or unticking a section now takes effect with the new Apply button (ticked shown, the rest hidden); Show these / Hide these still act on the sections the search lists.
+
+## 3.5 (2026-10-29)
+
+Requested by Arnold · edited by Claude
+
+- Column rotation in plans and elevations: a column modelled top to bottom (i node above j) turns its β the other way, as Gen NX and the 3D view do. K7 / K7A now sit parallel to the K8 next to them.
+
+## 3.4 (2026-10-29)
+
+Requested by Arnold · edited by Claude
+
+- Column schedule: one line per column position (same x, y). A column that changes size up the building (K1-95x95 to K1-88, or concrete to H) stays on one line, each run at its own width and labelled with its type, size and material; positions with the same types on the same levels are shown once, and the box under the line lists the types, top first.
+- Short runs stack their labels upward so they never overlap.
+- Legend: wider SIZE column, so steel designations (H 400x400x13/21) and long type names show in full (PDF); the DXF legend columns fit their longest text.
+- Column plans: a concrete column that stops under a steel column is drawn as an empty box under the H, as a column that stops.
+
+## 3.3 (2026-10-29)
+
+Requested by Arnold · edited by Claude
+
+- Rebar detail > Column rebar: new COLUMN SCHEDULE sheet. Every column type side by side, drawn at its width from the level it starts on to the level it stops at, with the levels, story heights, size and material, and the type name boxed under the base. Also in the PDF and DXF.
+- Legend SIZE follows the section type Gen NX gives: the DB designation for catalogue sections (H 350x175x7/11, P 216.3x8.2), the shape and plates for user steel sections, B x H for concrete.
+- 3D > Display: "Rebar detail on hover" turns the rebar table in the hover tip off (the section tip stays).
 
 ## 3.2 (2026-10-29)
 

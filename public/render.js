@@ -1,7 +1,7 @@
 // Paper renderers for a view: SVG (screen preview) and jsPDF (PDF). All work in A3 millimetres.
 import { drawPaper, PAPER } from "./core.js";
 
-const DASH = { center: [8, 2, 1.5, 2], dashed: [3, 1.5] };
+const DASH = { center: [8, 2, 1.5, 2], dashed: [3, 1.5], grid: [4, 2.5] };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const f = v => Math.round(v * 1000) / 1000;
 const FONT_RATIO = 0.72; // cap height / font size
@@ -26,7 +26,7 @@ export function toSvg(view, meta) {
       const anchor = st.align === "center" ? "middle" : st.align === "right" ? "end" : "start";
       const base = st.valign === "middle" ? "central" : st.valign === "top" ? "hanging" : "alphabetic";
       const rot = st.rot ? ` transform="rotate(${f(-st.rot)} ${f(x)} ${f(y)})"` : "";
-      out.push(`<text x="${f(x)}" y="${f(y)}" font-size="${f(st.size / FONT_RATIO)}" fill="${st.color || "#000"}" text-anchor="${anchor}" dominant-baseline="${base}"${rot}>${esc(s)}</text>`);
+      out.push(`<text x="${f(x)}" y="${f(y)}" font-size="${f(st.size / FONT_RATIO)}"${st.bold ? ' font-weight="bold"' : ""} fill="${st.color || "#000"}" text-anchor="${anchor}" dominant-baseline="${base}"${rot}>${esc(s)}</text>`);
     },
   };
   const { T, e } = drawPaper(view, R, meta);
@@ -55,6 +55,7 @@ export function toPdf(views, meta) {
     circle(cx, cy, r, st) { pen(st); if (st.fill) doc.setFillColor(...rgb(st.fill)); doc.circle(cx, cy, r, st.fill ? "FD" : "S"); },
     text(x, y, s, st) {
       s = latin(s);
+      doc.setFont("helvetica", st.bold ? "bold" : "normal");
       doc.setFontSize((st.size / FONT_RATIO) * 2.8346);
       doc.setTextColor(...rgb(st.color));
       // jsPDF alignment with rotation is unreliable, so place the baseline start point ourselves.

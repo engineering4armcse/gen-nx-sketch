@@ -94,7 +94,7 @@ export function build3dHtml(data, { title = "3D Structure", scripts, colorMode =
   #secBtn{text-align:left;font-weight:600;padding:0 28px 0 10px;position:relative}
   #secPanel{left:auto;right:0;width:260px;gap:6px}
   #secQ{width:100%;box-sizing:border-box;font:inherit;height:30px;padding:0 8px;border:1px solid #c5cbd3;border-radius:4px}
-  .acts{display:flex;gap:6px;margin:0}.acts button{flex:1;height:26px;font-size:12px}
+  .acts{display:flex;gap:6px;margin:0}.acts button{flex:1;height:26px;font-size:12px;white-space:nowrap;padding:0 6px}.acts .go{background:#ffcf1a;color:#111417;font-weight:600}.acts .go:disabled{background:#e4e6e9;color:#8a929c;cursor:default}
   #secList{max-height:calc(100vh - 170px);overflow:auto}
   #secNone{margin:6px 2px;color:#6b7480;font-size:12px}
   .li[hidden]{display:none}
@@ -125,13 +125,14 @@ export function build3dHtml(data, { title = "3D Structure", scripts, colorMode =
       <label class="row">Colour <select id="mode"><option value="section">By section</option><option value="kind">By member type</option></select></label>
       <label><input type="checkbox" id="gridchk" checked> Grid</label>
       <label><input type="checkbox" id="names"> Section names</label>
+      <label><input type="checkbox" id="rbTip" checked> Rebar detail on hover</label>
       <label class="row">Font <input type="range" id="font" min="0.4" max="3" step="0.1" value="1"></label>
       <p class="sub">Show</p>
       <span id="kinds"><label><input type="checkbox" data-kind="1" checked> Beams</label><label><input type="checkbox" data-kind="0" checked> Columns</label><label><input type="checkbox" data-kind="2" checked> Braces</label><label><input type="checkbox" data-kind="3" checked> Walls</label><label><input type="checkbox" data-kind="4" checked> Slabs</label></span>
     </div></span>
   <span class="dd sec" id="legend"><button id="secBtn" type="button" aria-expanded="false" aria-controls="secPanel">Sections</button>
   <div id="secPanel" class="pop" hidden><input id="secQ" type="search" placeholder="Search name, size or material" aria-label="Search sections" autocomplete="off">
-    <p class="acts"><button type="button" id="secAll">Show these</button><button type="button" id="secOff">Hide these</button></p>
+    <p class="acts"><button type="button" id="secAll">Show these</button><button type="button" id="secOff">Hide these</button><button type="button" id="secApply" class="go" disabled>Apply</button></p>
     <div id="secList"></div><p id="secNone" hidden>No section matches.</p></div></span>
 </div>
 <div id="tip"></div>
@@ -348,6 +349,7 @@ function legend() {
     return '<label class="li" data-q="' + esc((it.name + " " + (it.size || "") + " " + (it.matl || "")).toLowerCase()) + '"><input type="checkbox" data-i="' + i + '"' + (hidden.has(i) ? "" : " checked") + '><span class="sw" style="background:' + (mode === "section" ? it.color : D.kinds[it.kind].color) + '"></span>' +
       '<span class="nm">' + esc(it.name) + "<small>" + esc([it.size, it.matl].filter(Boolean).join(" · ")) + '</small></span><span class="n">' + counts.get(i) + "</span></label>"; }).join("");
   filterList();
+  $("secApply").disabled = true;
 }
 // section dropdown: closed by default, a search box filters by name, size or material
 function filterList() {
@@ -367,6 +369,9 @@ $("secQ").oninput = filterList;
 $("secQ").onkeydown = e => { if (e.key === "Escape") { $("secPanel").hidden = true; $("secBtn").setAttribute("aria-expanded", false); $("secBtn").focus(); } };
 const setShown = all => { for (const l of $("secList").children) if (!l.hidden) { const i = +l.firstChild.dataset.i; all ? hidden.delete(i) : hidden.add(i); } legend(); refresh(); };
 $("secAll").onclick = () => setShown(true); $("secOff").onclick = () => setShown(false);
+// ticks are collected first; Apply shows the ticked sections and hides the rest (also those the search hides)
+$("secList").onchange = () => { $("secApply").disabled = false; };
+$("secApply").onclick = () => { for (const c of $("secList").querySelectorAll("input[data-i]")) c.checked ? hidden.delete(+c.dataset.i) : hidden.add(+c.dataset.i); $("secApply").disabled = true; legend(); refresh(); };
 $("mode").value = mode;
 $("mode").onchange = e => { mode = e.target.value; legend(); refresh(); };
 const dispBtns = document.querySelectorAll("[data-disp]");
@@ -455,7 +460,7 @@ renderer.domElement.addEventListener("pointermove", e => {
     (S.desc ? "<br>Section " + h(S.desc) + (shape ? " (" + shape + ")" : "") + " mm" : u.t ? "<br>Thickness " + u.t + " mm" : "") +
     (u.matl ? "<br>Material " + h((MATL_TYPE[u.mtype] ? MATL_TYPE[u.mtype] + " " : "") + u.matl) : "") +
     (u.L ? "<br>L = " + u.L.toFixed(3) + " m" : "") +
-    (hasRebar(u.id) ? '<div class="rb">' + D.rebar.svg[D.rebar.of[u.id]] + (inApp ? '<i>Click: open rebar detail</i>' : "") + "</div>" : "");
+    (hasRebar(u.id) && $("rbTip").checked ? '<div class="rb">' + D.rebar.svg[D.rebar.of[u.id]] + (inApp ? '<i>Click: open rebar detail</i>' : "") + "</div>" : "");
   renderer.domElement.style.cursor = inApp && hasRebar(u.id) ? "pointer" : "";
   tip.style.display = "block";
   tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px";

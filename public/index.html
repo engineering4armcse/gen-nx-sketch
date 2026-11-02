@@ -25,14 +25,11 @@
       </label>
       <label class="check"><input type="checkbox" id="remember"> Remember the key on this computer</label>
       <button id="connect" type="submit" class="primary">Load model from Gen NX</button>
-      <button id="openJson" type="button" class="primary open-proj">Open project…</button>
       <div id="loadProg" class="prog" role="progressbar" aria-label="Reading the model" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
         <div class="prog-track"><div id="progFill" class="prog-fill"></div></div>
         <p class="prog-text"><span id="progLabel"></span><span id="progCount"></span></p>
       </div>
       <p id="status" class="status" role="status"></p>
-      <div id="restoreBar" class="restore" hidden><p id="restoreText"></p><div class="row"><button type="button" id="restoreYes" class="primary">Restore</button><button type="button" id="restoreNo">Discard</button></div></div>
-      <section id="recent" class="recent" aria-labelledby="recentHead" hidden><h2 id="recentHead">Recent projects</h2><ul id="recentList"></ul></section>
       <details class="adv">
         <summary>Connection settings</summary>
         <label>Base URL<input autocomplete="off" id="base" value="https://moa-engineers.midasit.com:443/gen" spellcheck="false"></label>
@@ -42,17 +39,9 @@
       </details>
       <input id="fileJson" type="file" accept=".json,application/json" hidden>
     </form>
-    <p class="start-foot"><button id="openLog" type="button" class="link">Version <span id="appVersion"></span> · history</button><span><button id="demo" type="button" class="link">Demo</button><span id="backWrap" hidden> · <button id="backToWork" type="button" class="link">Back to drawings</button></span></span></p>
+    <p class="start-foot"><button id="openLog" type="button" class="link">Version <span id="appVersion"></span> · history</button><span><button id="openJson" type="button" class="link">Open JSON</button> · <button id="demo" type="button" class="link">Demo</button><span id="backWrap" hidden> · <button id="backToWork" type="button" class="link">Back to drawings</button></span></span></p>
   </div>
 </section>
-<dialog id="revDlg" aria-labelledby="revTitle">
-  <form method="dialog">
-    <div class="dlg-head"><h2 id="revTitle">Model revision from Gen NX</h2></div>
-    <p id="revText" class="revtext"></p>
-    <p class="muted">The project name, settings, manual grid and rebar edits stay. Edits whose section is gone, and types whose rebar Gen NX also changed, are listed after the update.</p>
-    <div class="revbtns"><button value="saveold" id="revSaveOld">Save the current version first</button><button value="update" class="primary">Update</button><button value="cancel">Cancel</button></div>
-  </form>
-</dialog>
 <dialog id="logDlg" aria-labelledby="logTitle">
   <div class="dlg-head"><h2 id="logTitle">Version log</h2><button type="button" id="closeLog" aria-label="Close">Close</button></div>
   <div id="logBody"></div>
@@ -61,15 +50,14 @@
   <a class="brand" href="#start" data-go-start><img class="logo" src="logo.svg" width="30" height="30" alt=""><span translate="no"><b>Gen NX</b> Sketch</span></a>
   <p>Drafting sketches from a MIDAS Gen NX model</p>
   <span id="modelChip" class="chip" translate="no" hidden></span>
-  <a id="logout" class="logout" href="/logout" hidden>Log out</a>
 </header>
 <div class="layout">
   <aside class="side" aria-label="Workspace and model">
-    <div class="tabs" role="tablist" aria-label="Workspace" aria-orientation="vertical"><button id="tab2d" class="on" role="tab" aria-selected="true" aria-controls="pane2d"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-sketch"/></svg><span>2D sketch</span></button><button id="tabRebar" role="tab" aria-selected="false" aria-controls="pane2d" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-rebar"/></svg><span>Rebar detail</span></button><button id="tab3d" role="tab" aria-selected="false" aria-controls="pane3d" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-3d"/></svg><span>3D model</span></button></div>
+    <div class="tabs" role="tablist" aria-label="Workspace" aria-orientation="vertical"><button id="tab2d" class="on" role="tab" aria-selected="true" aria-controls="pane2d"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-sketch"/></svg><span>2D sketch</span></button><button id="tabRebar" role="tab" aria-selected="false" aria-controls="pane2d" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-rebar"/></svg><span>Rebar detail</span></button><button id="tab3d" role="tab" aria-selected="false" aria-controls="pane3d" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-3d"/></svg><span>3D model</span></button><button id="tabShop" role="tab" aria-selected="false" aria-controls="paneShop" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-bbs"/></svg><span>Shop drawing</span></button></div>
     <section class="modelbox" aria-labelledby="modelHead">
       <h2 id="modelHead">Model</h2>
       <p id="summary" class="summary"></p>
-      <div id="dataDl" class="row2" hidden><button type="button" id="saveProj" class="primary" title="Ctrl+S">Save project</button><button type="button" id="saveAs" title="Ctrl+Shift+S">Save as…</button><button type="button" id="updateModel" title="Read the model again from Gen NX; settings and rebar edits stay">Update model from Gen NX</button><button type="button" data-export="csv">Element list CSV</button></div>
+      <div id="dataDl" class="row2" hidden><button type="button" data-export="json">Model JSON</button><button type="button" data-export="csv">Element list CSV</button></div>
       <button id="changeModel" type="button" class="wide">Change project or model</button>
     </section>
   </aside>
@@ -77,6 +65,7 @@
     <div class="busybar" aria-hidden="true"></div>
     <div class="toolbar">
       
+      <div id="groupBar" class="gbar needs-model" role="tablist" aria-label="Drawing type"></div>
       <div class="pick needs-model">
         <select id="viewType" aria-label="Drawing type"></select>
         <select id="viewSel" aria-label="View"></select>
@@ -94,6 +83,17 @@
     </div>
     <div id="pane3d" class="pane" hidden>
       <iframe id="frame3d" title="3D structure"></iframe>
+    </div>
+    <div id="paneShop" class="pane" hidden>
+      <div class="bbs-bar">
+        <div class="seg" role="group" aria-label="Schedule"><button type="button" data-bbs="beams" class="on">Beams</button><button type="button" data-bbs="cols">Columns</button><button type="button" data-bbs="sum">Totals</button></div>
+        <input id="bbsQ" type="search" placeholder="Find type…" aria-label="Find type" autocomplete="off">
+        <label title="Concrete grade for laps and anchorage. Empty: read from each member's material">fc'<input id="bbsFc" type="number" min="20" max="45" step="5" placeholder="auto" inputmode="numeric"><i>MPa</i></label>
+        <label>Stock<input id="bbsStock" type="number" min="6" max="12" step="0.5" value="12" inputmode="decimal"><i>m</i></label>
+        <label>Waste<input id="bbsWaste" type="number" min="0" max="20" step="0.5" value="5" inputmode="decimal"><i>%</i></label>
+        <button type="button" id="bbsCsv" class="accent">BBS CSV</button>
+      </div>
+      <div id="bbsBody" class="bbs-body" tabindex="-1"></div>
     </div>
   </main>
   <aside class="props" aria-label="Drawing properties">
@@ -121,13 +121,14 @@
       <label class="check"><input type="checkbox" id="beamTop" checked> Beam top at floor level (top-centre)</label>
       <label class="check"><input type="checkbox" id="markNoRebar" checked> Mark beams without rebar detail (red)</label>
       <label>Text size (mm, standard 2)<input autocomplete="off" id="fontMm" type="number" inputmode="decimal" min="1" max="6" step="0.1" value="2"></label>
+      <label>Grid line strength <output id="gridAlphaV" for="gridAlpha">60%</output><input id="gridAlpha" type="range" min="10" max="100" step="5" value="60"></label>
       <label>Slab thickness, mm (beam rebar flange)<input autocomplete="off" id="slabT" type="number" inputmode="numeric" min="0" max="1000" step="10" value="120"></label>
       <label>Project name (title block)<input autocomplete="off" id="project" placeholder="Project name…"></label>
       <label>DXF units<select id="dxfUnits"><option value="mm">mm</option><option value="m">m</option></select></label>
     </details>
     <details id="edBox" class="needs-model rebar-only" open>
       <summary><svg class="ic" aria-hidden="true"><use href="icons.svg#i-edit"/></svg>Edit rebar</summary>
-      <p class="muted">Pick a type, or double-click a member in the 2D sketch or a type in the rebar tables. Change the bars and press Apply. Edits are saved in the project file (Save project).</p>
+      <p class="muted">Pick a type, or double-click a member in the 2D sketch or a type in the rebar tables. Change the bars and press Apply. Edits are saved with the Model JSON.</p>
       <label>Type<select id="edType"></select></label>
       <p id="edSrc" class="muted"></p>
       <div id="edForm">

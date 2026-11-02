@@ -3,7 +3,7 @@
 //   /db/REBC  Modify Column Rebar Data (per section)
 //   /db/RCHK  Rebar Input for Checking (per element, beam or column)
 // Drawn as schedule tables: one column per beam span group / column type, rows for the section sketch and bar lists.
-import { tableOf, adders, itemExtents, UNIT_TO_M, sectionOutline } from "./core.js";
+import { tableOf, adders, itemExtents, UNIT_TO_M, sectionOutline, tagOf, fmtEl, buildPlan, planLevels, barColor } from "./core.js";
 
 // "D25" -> 0.025, "#5" -> 5/8 in, "M20" / "Ø10" / "10" -> mm
 export function barDia(name) {
@@ -124,9 +124,8 @@ export function parseRebar(raw, model) {
 }
 
 // ---------- rebar edited by the user (Rebar detail > Edit rebar), kept in the Model JSON as REBAR_USER ----------
-// key "beam|<section name>|<n>" or "col|<section name>|<n>": n = position of the arrangement in that section (0 based).
-// Since 3.3 the value also carries _sig (the Gen NX arrangement it was made on) and _elems, so the edit follows its type
-// when a model revision reorders the arrangements. A key for a section with no Gen NX rebar adds a type.
+// key "beam|<section name>|<n>" or "col|<section name>|<n>": n = position of the arrangement in that section (0 based), so
+// an edit stays on its type when the model is loaded again. A key for a section with no Gen NX rebar adds a type.
 // "4D19 + 2D19" -> [{ n: 4, bar: "D19" }, { n: 2, bar: "D19" }]
 export const parseBars = t => String(t || "").split("+").map(x => /^\s*(\d+)\s*([A-Z#Ø]*\s*\d+(?:\.\d+)?)\s*$/i.exec(x)).filter(Boolean).map(m => ({ n: +m[1], bar: m[2].replace(/\s+/g, "").toUpperCase() }));
 // "D10-100" -> { bar: "D10", s: 0.1 }
@@ -181,35 +180,21 @@ export function editValues(d, kind) {
   return { n1: l.n1 || "", n2: l.n2 || "", bar: l.bar || "", dc: Math.round((l.dc ?? 0.05) * 1000), tieEnd: tieStr(t), tieMid: tieStr(c), ny: t?.ny || 2, nz: t?.nz || 2 };
 }
 
-// fingerprint of a type's Gen NX arrangement (before any edit): bars, covers and ties, not the elements or the name
-const rebarSig = d => { const { elems, sub, src, origin, key, name, sect, edited, gsig, ...x } = d; let h = 5381; for (const c of JSON.stringify(x)) h = (h * 33 + c.charCodeAt(0)) >>> 0; return h.toString(36); };
 function applyEdits(out, edits, model, f, elemsOf) {
   const sname = sid => (model.sects.get(sid) || {}).name;
   const sidOf = new Map([...model.sects].map(([id, s]) => [s.name, id]));
-  out.orphans = []; out.changed = [];
   for (const [kind, list] of [["beam", out.beams], ["col", out.cols]]) {
     const per = new Map();
-    for (const d of list) { const n = sname(d.sect); per.set(n, (per.get(n) || 0) + 1); d.key = `${kind}|${n || d.sect}|${per.get(n) - 1}`; d.gsig = rebarSig(d); }
-    // an edit finds its type by the Gen NX arrangement it was made on (_sig), so a revision that adds or drops an arrangement
-    // of the section does not move it to another type; edits from files before 3.3 have no _sig and keep the position (n)
-    const used = new Set();
-    for (let [key, v] of Object.entries(edits)) {
+    for (const d of list) { const n = sname(d.sect); per.set(n, (per.get(n) || 0) + 1); d.key = `${kind}|${n || d.sect}|${per.get(n) - 1}`; }
+    for (const [key, v] of Object.entries(edits)) {
       const [k, name] = key.split("|");
       if (k !== kind || !v) continue;
-      const same = list.filter(x => sname(x.sect) === name && !used.has(x));
-      let d = v._sig && v._sig !== "none" ? same.find(x => x.gsig === v._sig) : same.find(x => x.key === key);
-      if (!d && v._sig && v._sig !== "none" && same.length) { // Gen NX changed this arrangement: the type sharing most elements
-        const was = new Set(v._elems || []), score = x => x.elems.filter(id => was.has(id)).length;
-        d = same.reduce((a, b) => (score(b) > score(a) ? b : a));
-        out.changed.push(d);
-      }
-      if (d && d.key !== key) { delete edits[key]; edits[d.key] = v; key = d.key; } // stored under the type's current key
+      let d = list.find(x => x.key === key);
       if (!d) { // a section without Gen NX rebar
         const sid = sidOf.get(name), elems = sid === undefined ? [] : elemsOf(sid, kind === "beam" ? "beam" : "column");
-        if (!elems.length) { out.orphans.push({ key, name, kind }); continue; }
-        d = { sect: sid, elems, key, sectors: [], layers: [], gsig: "none" }; list.push(d);
+        if (!elems.length) continue;
+        d = { sect: sid, elems, key, sectors: [], layers: [] }; list.push(d);
       }
-      used.add(d);
       d.src = "rebar edited in this app"; d.edited = true;
       if (kind === "beam") {
         const lay = (bars, dc) => { let y = dc; return parseBars(bars).map((b, j, a) => { if (j) y += barDia(a[j - 1].bar) / 2 + LAYER_GAP + barDia(b.bar) / 2; return { ...b, d: y }; }); };
@@ -564,11 +549,173 @@ function rebarTables(model, rebar, opts = {}) {
   return tables;
 }
 
+// column rebar texts per element for the column plan and the schedule: { main: "16D25", tie: "D10-100/150/100" }
+export function colRebarTexts(model, rebar) {
+  const out = new Map();
+  for (const det of rebar.cols) {
+    const s = sectionBox(model, det.sect), r = drawColumnSection(adders([], 0.05), s, det, 0, 0, 0.05), sp = det.spiral ? "SPIRAL " : "";
+    const main = r.main.map(t => t.replace(/^L\d+: /, "").replace(/ - /, "")).join(" + ");
+    const tie = det.tieCen ? sp + tieEMEtxt(det.tie, det.tieCen) : det.tie ? sp + tieTxt(det.tie) : "";
+    for (const id of det.elems) out.set(id, { main, tie, mainBar: det.layers[0]?.bar, tieBar: det.tie?.bar });
+  }
+  return out;
+}
+
 export function buildRebarViews(model, rebar, opts = {}) {
-  return rebarTables(model, rebar, opts).flatMap(t => t.sheets(t.groups, t.rows, t.o));
+  return [...colRebarPlans(model, rebar, opts), ...beamRebarPlans(model, rebar, opts), ...colSchedule(model, opts), ...rebarTables(model, rebar, opts).flatMap(t => t.sheets(t.groups, t.rows, t.o))]; // the schedule leads the column rebar sheets
+}
+
+// Beam rebar plans, per level as the beam plans: single lines, the type above each span and its bars below.
+// MAIN BARS: top and bottom bar counts at I / midspan / J ("3/2/3", one number when all equal, "+" between layers).
+// STIRRUPS & SKIN: stirrup spacing I / midspan / J, legs when more than 2, skin bars per side.
+// The bar size most used on the plan is stated once in a note; any other size is written out and the text turns magenta.
+export function beamRebarPlans(model, rebar, opts = {}) {
+  if (!rebar.beams.length) return [];
+  const detOf = new Map(); for (const d of rebar.beams) for (const id of d.elems) detOf.set(id, d);
+  const sec = d => ["I", "M", "J"].map(k => d.sectors.find(x => x.key === k) || d.sectors[0]);
+  const det = m => m.ids.map(id => detOf.get(id)).find(Boolean);
+  const most = list => { const c = new Map(); for (const [b, w] of list) c.set(b, (c.get(b) || 0) + w); return [...c].sort((a, b) => b[1] - a[1])[0]?.[0]; };
+  const ends = (m, xs) => { const e = model.elems.find(x => x.id === m.ids[0]), p = model.nodes.get(e.nodes[0]), q = model.nodes.get(e.nodes[1]);
+    return (q.x - p.x) * (m.b.x - m.a.x) + (q.y - p.y) * (m.b.y - m.a.y) < 0 ? [xs[2], xs[1], xs[0]] : xs; };
+  const three = v => (v.every(x => x === v[0]) ? v[0] : v.join("/"));
+  const KINDS = {
+    main: {
+      title: "MAIN BARS",
+      common: () => most(rebar.beams.flatMap(d => sec(d).flatMap(x => [...x.top, ...x.bot]).map(l => [l.bar, l.n * d.elems.length]))), // one main size for the whole project
+      note: b => [`MAIN BARS ${b} UNLESS NOTED`, "MIDSPAN: TYPE (BOLD), TOP BARS ABOVE", "  THE LINE, BOTTOM BARS BELOW", "NEAR THE ENDS: SUPPORT BARS, TOP ABOVE,", "  BOTTOM BELOW (ALL LAYERS COUNTED)", "MIDSPAN ONLY: SAME BARS ALONG THE SPAN"],
+      // midspan bars with their size ("3D22"); support bars as a count when the size is the midspan one
+      text: (m, std) => {
+        const d = det(m); if (!d) return null;
+        // counts only; a size is written (and coloured) only when it is not the plan's main size
+        const xs = ends(m, sec(d)), cell = (x, f) => {
+          const ls = x[f]; if (!ls.length) return null;
+          const bars = [...new Set(ls.map(l => l.bar))], cnt = b => ls.filter(l => l.bar === b).reduce((q, l) => q + l.n, 0);
+          const other = bars.filter(b => b !== std).sort((p, q) => barDia(q) - barDia(p))[0];
+          return { s: bars.map(b => `${cnt(b)}${b === std ? "" : b}`).join(" "), odd: !!other, bar: other };
+        };
+        const mid = [cell(xs[1], "top"), cell(xs[1], "bot")], end = x => [cell(x, "top"), cell(x, "bot")], same = (p, q) => JSON.stringify(p) === JSON.stringify(q);
+        return { mid, ends: same(end(xs[0]), mid) && same(end(xs[2]), mid) ? null : [end(xs[0]), end(xs[2])] }; // all the same along the span: midspan only
+      },
+    },
+    stir: {
+      title: "STIRRUPS & SKIN",
+      common: () => most(rebar.beams.flatMap(d => sec(d).filter(x => x.stir).map(x => [x.stir.bar, d.elems.length]))),
+      note: b => [`STIRRUPS MOSTLY ${b}`, "ABOVE THE LINE: TYPE (BOLD) AND STIRRUPS,", "  SPACING (mm) AT I-END / MIDSPAN / J-END", "  (D10-100/150/100)", "1.5D13 = 3 LEGS, 2D13 = 4 LEGS", "BELOW THE LINE: SK = SKIN BARS EACH SIDE"],
+      text: (m, std) => {
+        const d = det(m); if (!d) return null;
+        // one text: legs / 2 in front when more than 2 legs, the size always, spacing at I / midspan / J ("1.5D13-100/150/100")
+        const xs = ends(m, sec(d)), st = xs.map(x => x.stir), mid = st[1] || st.find(Boolean); if (!mid) return null;
+        const legs = Math.max(...st.filter(Boolean).map(t => t.leg || 2)), pre = legs > 2 ? `${+(legs / 2).toFixed(1)}` : "";
+        const oneBar = st.every(t => !t || t.bar === mid.bar), sp = st.map(t => (t ? (oneBar ? "" : t.bar + "-") + Math.round(t.s * 1000) : "-")).join("/");
+        const other = st.filter(t => t && t.bar !== std).map(t => t.bar).sort((p, q) => barDia(q) - barDia(p))[0];
+        const sk = xs.find(x => x.skin)?.skin;
+        return { mid: [{ s: `${pre}${oneBar ? mid.bar + "-" : ""}${sp}`, odd: !!other, bar: other }, sk ? { s: `SK ${sk.n}${sk.bar}`, odd: false, bar: sk.bar } : null], ends: null };
+      },
+    },
+  };
+  const out = [];
+  for (const kind of ["main", "stir"]) for (const l of planLevels(model, opts)) for (const dir of ["X", "Y"]) {
+    const v = buildPlan(model, { ...opts, rebarPlan: { kind, dir, ...KINDS[kind] } }, l, "beam");
+    if (v && v.items.some(i => i.tip && /^Beam/m.test(i.tip.split("\n")[1] || ""))) out.push(v);
+  }
+  return out;
+}
+
+// Column rebar plans: the column plans, each column with its main bars and ties under its name
+export function colRebarPlans(model, rebar, opts = {}) {
+  if (!rebar.cols.length) return [];
+  return (opts.levels || []).map(l => buildPlan(model, { ...opts, colRebarPlan: true }, l, "column"))
+    .filter(v => v && v.items.some(i => i.tip && /^Column/m.test(i.tip.split("\n")[1] || "")));
+}
+
+// Column schedule (SCHEDULE KOLOM): one line per column stack (same x, y), drawn from the level it starts on to the level it
+// stops at; each run at its own width, so a section change up the building stays on the same line. Stacks with the same
+// types on the same levels are shown once. Levels across the sheet, story heights on the left, type / size / material by each run.
+const SCHED_SCALES = [50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000];
+export function colSchedule(model, opts = {}) {
+  const N = id => model.nodes.get(id), fs = opts.fontScale || 1, stacks = new Map(), q = v => Math.round(v / 0.05);
+  for (const e of model.elems) {
+    if (e.kind !== "column" || e.nodes.length !== 2) continue;
+    const [p0, p1] = e.nodes.map(N).sort((a, b) => a.z - b.z), key = q(p0.x) + "," + q(p0.y);
+    if (!stacks.has(key)) stacks.set(key, { segs: [], elems: [] });
+    const st = stacks.get(key); const rb = model.colRebar?.get(e.id); st.segs.push({ a: p0.z, b: p1.z, name: tagOf(model, e), sect: e.sect, sectName: e.sectName, main: rb?.main || "", tie: rb?.tie || "", mainBar: rb?.mainBar, tieBar: rb?.tieBar }); st.elems.push(e.id);
+  }
+  if (!stacks.size) return [];
+  const same = new Map(); // join stories of one type into runs, then collapse stacks with the same runs
+  for (const st of stacks.values()) {
+    const runs = [];
+    for (const g of st.segs.sort((a, b) => a.a - b.a)) { const l = runs[runs.length - 1]; if (l && l.name === g.name && l.main === g.main && l.tie === g.tie && g.a <= l.b + 0.05) l.b = Math.max(l.b, g.b); else runs.push({ ...g }); }
+    const sig = runs.map(r => `${r.name}@${r.a.toFixed(2)}-${r.b.toFixed(2)}:${r.main}:${r.tie}`).join("|");
+    if (same.has(sig)) same.get(sig).elems.push(...st.elems);
+    else same.set(sig, { runs, elems: [...st.elems], names: [...new Set(runs.map(r => r.name))].reverse() }); // top type first, as read up the building
+  }
+  const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+  for (const g of same.values()) g.name = g.names.join(" / ");
+  const groups = [...same.values()].sort((a, b) => byName(a.runs[0].name, b.runs[0].name) || a.runs.length - b.runs.length || byName(a.name, b.name));
+  const zs = groups.flatMap(g => g.runs.flatMap(r => [r.a, r.b])), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const lv = (opts.levels || []).filter(l => l.z >= z0 - 0.05 && l.z <= z1 + 0.05);
+  const scale = SCHED_SCALES.find(sc => (z1 - z0) / (sc / 1000) <= 205) || SCHED_SCALES[SCHED_SCALES.length - 1], k = scale / 1000;
+  const info = opts.info || new Map(), txt = r => [r.name, info.get(r.sectName)?.size || "", info.get(r.sectName)?.matl || "", r.main, r.tie];
+  const bOf = r => model.sects.get(r.sect)?.b || 0.3, cw = 2 * 0.85 * fs;
+  const boxW = g => Math.max(10, ...g.names.map(n => n.length * 2.4 * 0.85 * fs + 4)); // name box under the stack, paper mm
+  const slot = g => { // paper mm: margin, half the widest run, then the widest run label right of its run
+    const half = Math.max(...g.runs.map(bOf)) / k / 2, lab = Math.max(...g.runs.map(r => bOf(r) / k / 2 + 1 + Math.max(...txt(r).map(t => t.length)) * cw));
+    return Math.max(5 + half + lab + 4, 5 + half + boxW(g) / 2 + 3, 24);
+  };
+  const left = 42 * fs, W = 300 - left, sheets = [[]];
+  let used = 0;
+  for (const g of groups) { const w = slot(g); if (used + w > W && sheets[sheets.length - 1].length) { sheets.push([]); used = 0; } sheets[sheets.length - 1].push({ g, w }); used += w; }
+  return sheets.map((sh, si) => {
+    const items = [], A = adders(items, k, fs, { dim: "DIM" }), hits = [], used = new Set();
+    const xEnd = sh.reduce((x, c) => x + c.w * k, 0), lst = { layer: "SS00G1", color: "#0050a0", lw: 0.13, dash: "dashed" };
+    for (const l of lv) {
+      A.line([-4 * k, l.z], [xEnd, l.z], lst);
+      A.poly([[-6 * k, l.z], [-7.5 * k, l.z + 2.2 * k], [-4.5 * k, l.z + 2.2 * k]], { layer: "SS00G1", color: "#0050a0", lw: 0.18, closed: true });
+      A.text([-left * k + 1 * k, l.z + 0.6 * k], l.name, { layer: "TEXT UMUM", color: "#0050a0", size: 2, align: "left", valign: "bottom" });
+      A.text([-left * k + 1 * k, l.z - 0.6 * k], "EL. " + fmtEl(l.z), { layer: "TEXT UMUM", color: "#0050a0", size: 2, align: "left", valign: "top" });
+    }
+    if (lv.length > 1) A.dimChain(lv.map(l => l.z), -12 * k, "v", -1);
+    let x = 0;
+    for (const { g, w } of sh) {
+      const cx = x + (Math.max(...g.runs.map(bOf)) / 2 + 5 * k), multi = g.runs.length > 1 && new Set(g.runs.map(r => r.name)).size > 1;
+      let labTop = -Infinity;
+      A.line([cx, g.runs[0].a], [cx, g.runs[g.runs.length - 1].b], { layer: "SS00GG", color: "#a3a8b0", lw: 0.09, dash: "center" }); // one centreline up the stack
+      for (const r of g.runs) {
+        const B = Math.max(bOf(r), 2 * k), [name, size, matl, main, tie] = txt(r), tx = cx + B / 2 + 1 * k;
+        A.poly([[cx - B / 2, r.a], [cx + B / 2, r.a], [cx + B / 2, r.b], [cx - B / 2, r.b]], { layer: "SS00G6", color: INK, lw: 0.35, closed: true, tip: `${name}\n${size} · ${matl}` });
+        // with the rebar: main bars, then ties, each in the colour of its bar size (as the rebar plans)
+        const col = b => { if (!b) return {}; const [color, aci] = barColor(b); used.add(b); return { layer: `TEXT REBAR ${b}`, color, aci }; };
+        const lines = [[multi && name !== size ? name : ""], [size], [matl], [main, col(r.mainBar)], [tie, col(r.tieBar)]].filter(l => l[0]);
+        const y0 = Math.max(r.a + 1 * k, labTop); labTop = y0 + lines.length * 3 * k + 0.5 * k; // short runs: labels stack up, never over the run below's
+        lines.forEach(([t, st], i) => A.text([tx, y0 + (lines.length - 1 - i) * 3 * k], t, { ...T_VAL, ...st, align: "left", valign: "bottom" }));
+      }
+      const yb = z0 - 4 * k, bw = boxW(g) * k, bh = (2 + 4 * g.names.length) * k; // one line per type in the box
+      A.poly([[cx - bw / 2, yb], [cx + bw / 2, yb], [cx + bw / 2, yb - bh], [cx - bw / 2, yb - bh]], { ...T_LAB, layer: "7", lw: 0.18, closed: true });
+      g.names.forEach((n, i) => A.text([cx, yb - (3 + 4 * i) * k], n, { ...T_LAB, align: "center", valign: "middle" }));
+      hits.push({ elems: g.elems, box: [x, yb - bh, x + w * k, z1] });
+      x += w * k;
+    }
+    const range = sh.length > 1 ? `${sh[0].g.name} to ${sh[sh.length - 1].g.name}` : sh[0].g.name;
+    addNote(items, "One line per column position (same x, y), from the level it starts on to the level it stops at; each run at its own size, with its type, size, concrete, main bars and ties (end / middle / end). Positions with the same types and rebar on the same levels are shown once. Check before issue.", itemExtents(items), k);
+    return { kind: "rebar", sub: "colrebar", id: `rebar:colsched:${si}`, title: `COLUMN SCHEDULE - ${si + 1}/${sheets.length} (${range})`, scale, k, items, legend: [], hits,
+      notes: used.size ? ["BY EACH RUN: TYPE, SIZE, CONCRETE, MAIN BARS, TIES", ...[...used].sort((p, q) => parseFloat(p.slice(1)) - parseFloat(q.slice(1))).map(b => ({ s: `${b} BARS IN THIS COLOUR`, color: barColor(b)[0], aci: barColor(b)[1], swatch: true }))] : null };
+  });
 }
 
 // one small table per rebar type for the 3D hover: [{ elems, view }] (view.bare: no paper frame, cropped to the table)
 export function rebarCards(model, rebar, opts = {}) {
   return rebarTables(model, rebar, { slabT: opts.slabT }).flatMap(t => t.groups.map(g => ({ elems: g.elems, view: { ...t.sheets([g], t.rows, { ...t.o, note: "" })[0], bare: true } })));
 }
+
+// main bars of a column type per layer, counted as the section sheet draws them: [{ bar, n }]; section box { B, H, round }
+export function colBars(model, det) {
+  const s = sectionBox(model, det.sect);
+  return { s, bars: det.layers.map(l => {
+    if (s.round || s.general) return { bar: l.bar, n: l.total || l.n1 + l.n2, dc: l.dc };
+    const { nx, ny } = rectBars(l.n1, l.n2, s.B, s.H);
+    return { bar: l.bar, n: 2 * nx + 2 * ny - 4, dc: l.dc };
+  }) };
+}
+export const beamBox = (model, det) => sectionBox(model, det.sect);
+// column section sketch for the shop drawing tables (same drawing as the schedule)
+export const drawColSection = (A, model, det, cx, cy, k) => drawColumnSection(A, sectionBox(model, det.sect), det, cx, cy, k);
