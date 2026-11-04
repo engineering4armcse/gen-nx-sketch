@@ -3,6 +3,7 @@
 //   /db/REBC  Modify Column Rebar Data (per section)
 //   /db/RCHK  Rebar Input for Checking (per element, beam or column)
 // Drawn as schedule tables: one column per beam span group / column type, rows for the section sketch and bar lists.
+import { designElems } from "./design.js";
 import { tableOf, adders, itemExtents, UNIT_TO_M, sectionOutline, tagOf, fmtEl, buildPlan, planLevels, barColor } from "./core.js";
 
 // "D25" -> 0.025, "#5" -> 5/8 in, "M20" / "Ø10" / "10" -> mm
@@ -27,8 +28,14 @@ export function parseRebar(raw, model) {
   const lines = model.elems.filter(e => e.nodes.length === 2), byId = new Map(lines.map(e => [e.id, e]));
   const elemsOf = (sid, kind) => lines.filter(e => e.sect === sid && (!kind || e.kind === kind)).map(e => e.id);
 
+  // Concrete Design results pasted in (design.js): they replace the beam rebar of REBB and RCHK
+  const useDesign = raw.CDESIGN?.beamUse === "design" && Object.keys(raw.CDESIGN.beams || {}).length;
+  const useColDesign = raw.CDESIGN?.colUse === "design" && Object.keys(raw.CDESIGN.cols || {}).length;
+  if (useColDesign) out.cols.push(...designCols(raw, model));
+  if (useDesign) out.beams.push(...designBeams(raw, model));
+
   // REBB: one detail per section item
-  for (const [sid, rec] of Object.entries(tableOf(raw.REBB, "REBB"))) {
+  for (const [sid, rec] of useDesign ? [] : Object.entries(tableOf(raw.REBB, "REBB"))) {
     // older builds: MAIN_BAR_TOP {LAYER1,LAYER2}, DT/DB covers, SKIN_BAR {NAME,NUM}; sub-sections list their elements in ELEMS.KEYS
     const items = rec.ITEMS || [], subElems = new Set(items.flatMap(it => it.ELEMS?.KEYS || []).map(Number));
     items.forEach((it, i) => {
@@ -57,7 +64,7 @@ export function parseRebar(raw, model) {
 
   // REBC: Modify Column Rebar Data, per section. vMAIN_BAR {NAME, NUM total, ROW, D0 cover}, SHEAR_BAR_END/CEN {NAME, LEG_Y, LEG_Z, DIST}.
   // ROW = bars on each face along H (corners included), the rest share the faces along B. DO (cover to bar centre) sits on the item.
-  for (const [sid, rec] of Object.entries(tableOf(raw.REBC, "REBC"))) {
+  for (const [sid, rec] of useColDesign ? [] : Object.entries(tableOf(raw.REBC, "REBC"))) {
     const items = rec.ITEMS || [], subElems = new Set(items.flatMap(it => it.ELEMS?.KEYS || []).map(Number));
     items.forEach((it, i) => {
       const elems = it.ELEMS?.KEYS ? [...new Set(it.ELEMS.KEYS.map(Number))] : it.CREATE_SUB_SECTION ? [] : elemsOf(+sid).filter(id => !subElems.has(id));
@@ -78,7 +85,7 @@ export function parseRebar(raw, model) {
     const el = byId.get(+eid); // RCHK keys are element ids; plates share section numbers, so line elements only
     if (!el) continue;
     let d = null;
-    if (String(rec.MEMBTYPE).toUpperCase() === "BEAM" && rec.BEAM) {
+    if (String(rec.MEMBTYPE).toUpperCase() === "BEAM" && rec.BEAM && !useDesign) {
       const subs = new Map((rec.BEAM.vSUB_BAR || []).map(s => [String(s.SECTOR).toUpperCase(), s]));
       const layers = arr => (arr || []).filter(b => +b.BAR_NUM > 0).sort((a, b) => (a.LAYER || 0) - (b.LAYER || 0))
         .map(b => ({ n: +b.BAR_NUM, bar: String(b.BAR_NAME1), bar2: b.BAR_NAME2 ? String(b.BAR_NAME2) : "", d: (+b.dD || 0.05 / f) * f }));
@@ -92,7 +99,7 @@ export function parseRebar(raw, model) {
         };
       });
       if (sectors.length) d = { type: "beam", sectors };
-    } else if (String(rec.MEMBTYPE).toUpperCase() === "COLUMN" && rec.COLM) {
+    } else if (String(rec.MEMBTYPE).toUpperCase() === "COLUMN" && rec.COLM && !useColDesign) {
       const layers = (rec.COLM.vLAYER || []).map(l => {
         const pos = new Map((l.vPOSITION || []).map(p => [String(p.POSITION).toUpperCase(), p]));
         const p1 = pos.get("P1"), p2 = pos.get("P2");
@@ -121,6 +128,40 @@ export function parseRebar(raw, model) {
   }
   for (const list of [out.beams, out.cols]) for (const d of list) d.name = detName(sectionBox(model, d.sect), d);
   return out;
+}
+
+// beam types from the Concrete Design results: elements of one section with the same bars at I, M and J form one type
+// (a section whose elements were designed differently gets several types: B2A3-A, B2A3-B ...)
+function designBeams(raw, model) {
+  const groups = new Map(), sectOf = new Map(model.elems.map(e => [e.id, e.sect])), DC = 0.05;
+  const layers = ls => { let d = DC; return ls.map((l, j) => { if (j) d += barDia(ls[j - 1].bar) / 2 + LAYER_GAP + barDia(l.bar) / 2; return { n: l.n, bar: l.bar, d }; }); };
+  for (const [id, d] of Object.entries(raw.CDESIGN.beams)) {
+    const elems = designElems(id, d, model, raw);
+    if (!elems.length) continue;
+    const sectors = SECTORS.map(([key, label]) => ({ key, label, top: layers(d[key]?.top || []), bot: layers(d[key]?.bot || []), stir: d[key]?.stir || null, skin: null }));
+    const sect = sectOf.get(elems[0]), k = sect + "|" + JSON.stringify(sectors);
+    if (!groups.has(k)) groups.set(k, { sect, sectors, elems: [], src: "Concrete Design output", origin: { t: "CDESIGN" } });
+    groups.get(k).elems.push(...elems);
+  }
+  return [...groups.values()].sort((a, b) => a.sect - b.sect || a.elems[0] - b.elems[0]);
+}
+
+// column types from the Concrete Design results, grouped as the beams: same section, same bars and ties
+function designCols(raw, model) {
+  const groups = new Map(), sectOf = new Map(model.elems.map(e => [e.id, e.sect]));
+  for (const [id, d] of Object.entries(raw.CDESIGN.cols)) {
+    const elems = designElems(id, d, model, raw);
+    if (!elems.length || !d.main) continue;
+    const sect = sectOf.get(elems[0]), round = !!(model.sects.get(sect) || {}).round, { n, bar } = d.main, row = round ? 0 : d.main.row;
+    const t = d.tieEnd || d.tieMid, dc = 0.04 + barDia(t?.bar || "D10") + barDia(bar) / 2; // 40 mm cover to the ties
+    const layers = [{ dc, n1: row ? Math.max(2, (n - 2 * row) / 2 + 2) : n, n2: row || 0, bar, total: n, corner: "" }];
+    const tie = d.tieEnd ? { ...d.tieEnd, key: "end" } : d.tieMid ? { ...d.tieMid, key: "centre" } : null;
+    const tieCen = d.tieEnd && d.tieMid && d.tieMid.s !== d.tieEnd.s ? { ...d.tieMid, key: "centre" } : null;
+    const det = { type: "col", sect, layers, tie, tieCen, spiral: false }, k = sect + "|" + JSON.stringify(det);
+    if (!groups.has(k)) groups.set(k, { ...det, elems: [], src: "Concrete Design output", origin: { t: "CDESIGN" } });
+    groups.get(k).elems.push(...elems);
+  }
+  return [...groups.values()].sort((a, b) => a.sect - b.sect || a.elems[0] - b.elems[0]);
 }
 
 // ---------- rebar edited by the user (Rebar detail > Edit rebar), kept in the Model JSON as REBAR_USER ----------
