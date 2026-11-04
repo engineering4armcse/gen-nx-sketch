@@ -2,6 +2,12 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.27 (2026-11-04)
+
+Requested by Arnold · edited by Claude
+
+- Concrete Design rebar with Member Assignment: MEMB in the pasted Beam / Column Design table is now read as the design member (all its elements) when members were assigned in Gen NX, decided for the whole table by which reading matches the sections. Before, a member's bars went only to the element that happened to have the same number, so the rest of the member showed the plain section name in red (e.g. TB46 instead of TB46-C, G613 instead of G613-B).
+
 ## 3.26 (2026-11-04)
 
 Requested by Arnold · edited by Claude

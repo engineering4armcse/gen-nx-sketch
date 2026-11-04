@@ -3,7 +3,7 @@
 //   /db/REBC  Modify Column Rebar Data (per section)
 //   /db/RCHK  Rebar Input for Checking (per element, beam or column)
 // Drawn as schedule tables: one column per beam span group / column type, rows for the section sketch and bar lists.
-import { designElems } from "./design.js";
+import { designMapper } from "./design.js";
 import { tableOf, adders, itemExtents, UNIT_TO_M, sectionOutline, tagOf, fmtEl, buildPlan, planLevels, barColor } from "./core.js";
 
 // "D25" -> 0.025, "#5" -> 5/8 in, "M20" / "Ø10" / "10" -> mm
@@ -135,8 +135,9 @@ export function parseRebar(raw, model) {
 function designBeams(raw, model) {
   const groups = new Map(), sectOf = new Map(model.elems.map(e => [e.id, e.sect])), DC = 0.05;
   const layers = ls => { let d = DC; return ls.map((l, j) => { if (j) d += barDia(ls[j - 1].bar) / 2 + LAYER_GAP + barDia(l.bar) / 2; return { n: l.n, bar: l.bar, d }; }); };
+  const elemsOf = designMapper(raw.CDESIGN.beams, model, raw);
   for (const [id, d] of Object.entries(raw.CDESIGN.beams)) {
-    const elems = designElems(id, d, model, raw);
+    const elems = elemsOf(id, d);
     if (!elems.length) continue;
     const sectors = SECTORS.map(([key, label]) => ({ key, label, top: layers(d[key]?.top || []), bot: layers(d[key]?.bot || []), stir: d[key]?.stir || null, skin: null }));
     const sect = sectOf.get(elems[0]), k = sect + "|" + JSON.stringify(sectors);
@@ -149,8 +150,9 @@ function designBeams(raw, model) {
 // column types from the Concrete Design results, grouped as the beams: same section, same bars and ties
 function designCols(raw, model) {
   const groups = new Map(), sectOf = new Map(model.elems.map(e => [e.id, e.sect]));
+  const elemsOf = designMapper(raw.CDESIGN.cols, model, raw);
   for (const [id, d] of Object.entries(raw.CDESIGN.cols)) {
-    const elems = designElems(id, d, model, raw);
+    const elems = elemsOf(id, d);
     if (!elems.length || !d.main) continue;
     const sect = sectOf.get(elems[0]), round = !!(model.sects.get(sect) || {}).round, { n, bar } = d.main, row = round ? 0 : d.main.row;
     const t = d.tieEnd || d.tieMid, dc = 0.04 + barDia(t?.bar || "D10") + barDia(bar) / 2; // 40 mm cover to the ties
