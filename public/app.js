@@ -144,7 +144,7 @@ function setModel(raw, source, migrate) {
   }
   const m = state.model, kinds = {};
   for (const e of m.elems) kinds[e.kind] = (kinds[e.kind] || 0) + 1;
-  $("#summary").innerHTML = `<b>${source}</b> · unit ${m.unit}<br>${m.nodes.size} nodes · ${m.elems.length} elements` +
+  $("#summary").innerHTML = `<b>${source}</b> · unit ${m.unit}${m.unitGuessed ? ` <span class="warn" title="Check the drawing scale; Gen NX sets it under Tools > Unit System.">(no unit in the model${m.unitGiven ? ` ('${esc(m.unitGiven)}')` : ""}: guessed from the section sizes)</span>` : ""}<br>${m.nodes.size} nodes · ${m.elems.length} elements` +
     `<br>${Object.entries(kinds).map(([k, n]) => `${n} ${C.KIND_LABEL[k].toLowerCase()}`).join(" · ")}` +
     `<br>${m.sects.size} sections · ${m.thick.size} thicknesses · ${m.stories.length ? m.stories.length + " stories" : "no story data (levels from geometry)"}`;
   document.body.classList.add("has-model"); document.body.classList.remove("on-start"); $("#backWrap").hidden = false;

@@ -345,3 +345,4 @@ input[type=range]{accent-color:var(--accent);width:100%}
 .revbtns button{width:auto;flex:1 1 auto;margin:0}
 /* Open project: the second main action on the start page, right under Load model from Gen NX */
 #start .open-proj{margin-top:10px}
+#summary .warn{color:var(--err-dark);font-weight:500}
