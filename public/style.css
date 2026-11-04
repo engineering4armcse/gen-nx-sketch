@@ -346,3 +346,10 @@ input[type=range]{accent-color:var(--accent);width:100%}
 /* Open project: the second main action on the start page, right under Load model from Gen NX */
 #start .open-proj{margin-top:10px}
 #summary .warn{color:var(--err-dark);font-weight:500}
+#designDlg form{padding:0 20px 18px}
+#designDlg textarea{width:100%;box-sizing:border-box;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre;overflow:auto;border:1px solid var(--line,#dfe3e8);border-radius:var(--r);padding:8px;background:var(--bg,#fff);color:inherit;margin-top:8px}
+#designDlg .dsec{border:1px solid var(--line,#dfe3e8);border-radius:var(--r);margin:10px 0 0;padding:8px 12px 4px}
+#designDlg .dsec legend{font-weight:600;padding:0 4px}
+#designDlg select{width:100%}
+.srcs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:600px){.srcs{grid-template-columns:1fr}}

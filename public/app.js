@@ -8,6 +8,7 @@ import { buildBundleHtml } from "./bundle.js";
 import { makeZip } from "./zip.js";
 import { VERSION, CHANGELOG } from "./changelog.js";
 import * as P from "./project.js";
+import { parseBeamDesign, parseColumnDesign } from "./design.js";
 
 const $ = s => document.querySelector(s);
 const SETTINGS_KEY = "gnx-sketch-settings", EDITS_KEY = "gnx-sketch-rebar-edits"; // EDITS_KEY: rebar edits of versions before 3.3, read once to migrate
@@ -17,7 +18,7 @@ const state = { raw: null, source: "", model: null, views: [], currentId: null, 
   project: null, handle: null, fileName: "", fileTime: 0, dirty: false }; // project: GNX_PROJECT of the open project; handle: its file (Chrome/Edge)
 
 // ---------- settings ----------
-const FIELDS = ["base", "conn", "colorMode", "labels", "tol", "gridMode", "gridX", "gridY", "project", "dxfUnits", "scope", "remember", "fontMm", "slabT", "beamTop", "markNoRebar", "gridAlpha"];
+const FIELDS = ["base", "conn", "colorMode", "labels", "tol", "gridMode", "gridX", "gridY", "project", "dxfUnits", "scope", "remember", "fontMm", "slabT", "beamTop", "markNoRebar", "gridAlpha", "beamSrc", "colSrc"];
 function loadSettings() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch {}
@@ -107,6 +108,7 @@ async function loadFromMidas() {
     await new Promise(r => setTimeout(r, 350)); // let the full bar show before the workspace opens
     openProject({ raw, project: null, settings: null }, "MIDAS Gen NX", { midasReadAt: new Date().toISOString() });
     progress(null);
+    if ($("#beamSrc").value === "design" || $("#colSrc").value === "design") openDesign({ beamUse: $("#beamSrc").value, colUse: $("#colSrc").value }); // chosen on the start page
   } catch (e) {
     progress(null); status(e.message, "err");
   } finally { btn.disabled = false; busy(false); }
@@ -707,6 +709,7 @@ async function updateFromMidas() {
   if (choice === "cancel" || !choice) { status("Model not updated.", ""); return; }
   if (choice === "saveold" && !(await saveProject(true, true, `${fileBase()}_R${(state.project.revisions || []).length}.json`))) { status("Model not updated: the current version was not saved.", "err"); return; }
   raw.REBAR_USER = state.raw.REBAR_USER || {};
+  if (state.raw.CDESIGN) raw.CDESIGN = state.raw.CDESIGN; // pasted Concrete Design results stay; paste again after a new design run
   state.project.midasReadAt = new Date().toISOString();
   (state.project.revisions ||= []).push({ at: state.project.midasReadAt, summary: text });
   setModel(raw, "MIDAS Gen NX", false); // rebuild() reports edits that lost or changed their type
@@ -714,6 +717,34 @@ async function updateFromMidas() {
   setDirty(true);
   status(`Model updated: ${text}.` + (notes ? " " + notes : " Save to keep the revision in the file."), notes ? "err" : "ok");
 }
+// ---------- rebar source per kind: rebar tables or the pasted Concrete Design output (design.js) ----------
+// kept in the project as raw.CDESIGN = { beamUse, colUse: "tables" | "design", beams, cols, beamsAt, colsAt }
+function openDesign(pre = {}) {
+  if (!state.model) return;
+  const cd = state.raw.CDESIGN || {}, dlg = $("#designDlg");
+  for (const [k, use, list, at, what] of [["Beam", "beamUse", "beams", "beamsAt", "beam"], ["Col", "colUse", "cols", "colsAt", "column"]]) {
+    $(`#design${k}Use`).value = pre[use] || cd[use] || "tables"; $(`#design${k}Text`).value = "";
+    const n = Object.keys(cd[list] || {}).length, el = $(`#design${k}Info`);
+    el.dataset.kept = n ? `In this project: ${n} ${what} member(s) pasted ${String(cd[at] || "").slice(0, 10)}. Paste again to replace them, or leave empty to keep them.` : "";
+    el.textContent = el.dataset.kept;
+  }
+  dlg.showModal(); (pre.beamUse === "design" || !pre.colUse ? $("#designBeamText") : $("#designColText")).focus();
+  dlg.onclose = () => {
+    if (dlg.returnValue !== "use") return;
+    const next = { ...(state.raw.CDESIGN || {}) }, errs = [];
+    for (const [k, use, list, at, parse, what] of [["Beam", "beamUse", "beams", "beamsAt", parseBeamDesign, "Beam"], ["Col", "colUse", "cols", "colsAt", parseColumnDesign, "Column"]]) {
+      next[use] = $(`#design${k}Use`).value;
+      const text = $(`#design${k}Text`).value.trim();
+      if (text) { const r = parse(text); if (r.count) { next[list] = r[list]; next[at] = new Date().toISOString(); } else errs.push(`${what} Design: ${r.errors.join(" ")}`); }
+      if (next[use] === "design" && !Object.keys(next[list] || {}).length) { next[use] = "tables"; errs.push(`${what} rebar stays from the rebar tables: no ${what} Design table pasted.`); }
+    }
+    state.raw.CDESIGN = next;
+    rebuild(); setDirty(true);
+    const say = (list, what, use) => { const ds = list.filter(d => d.origin?.t === "CDESIGN"); return use === "design" ? `${what}: Concrete Design, ${ds.length} type(s) on ${ds.reduce((s, d) => s + d.elems.length, 0)} element(s)` : `${what}: rebar tables`; };
+    status([say(state.rebar.beams, "Beams", next.beamUse), say(state.rebar.cols, "Columns", next.colUse)].join(". ") + "." + (errs.length ? " " + errs.join(" ") : ""), errs.length ? "err" : "ok");
+  };
+}
+
 // columns whose position is off every manual grid line (more than the merge tolerance); auto grids follow the columns anyway
 function offGridColumns() {
   if ($("#gridMode").value !== "manual" || !state.grids) return 0;
@@ -753,6 +784,10 @@ function init() {
   $("#saveProj").onclick = () => saveProject(false);
   $("#saveAs").onclick = () => saveProject(true);
   $("#updateModel").onclick = updateFromMidas;
+  $("#designBtn").onclick = () => openDesign();
+  const designInfo = (k, parse, what) => { const t = $(`#design${k}Text`).value.trim(), el = $(`#design${k}Info`); if (!t) { el.textContent = el.dataset.kept || ""; return; } const r = parse(t), n = r.count; el.textContent = n ? `${n} ${what}(s) read${r.failed ? `, ${r.failed} with a failed design` : ""}.` + (r.errors.length ? " " + r.errors.slice(0, 3).join(" ") : "") : r.errors.join(" "); };
+  $("#designBeamText").oninput = () => designInfo("Beam", parseBeamDesign, "beam member");
+  $("#designColText").oninput = () => designInfo("Col", parseColumnDesign, "column member");
   // Ctrl+S saves the project (to its file in Chrome/Edge), Ctrl+Shift+S asks for a new file
   addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (state.model) saveProject(e.shiftKey); } });
   addEventListener("beforeunload", e => { if (state.dirty) { autosaveNow(); e.preventDefault(); e.returnValue = ""; } });

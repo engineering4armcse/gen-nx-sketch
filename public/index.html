@@ -24,6 +24,11 @@
         <span class="row"><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Gen NX › Apps › API Settings"><button id="showKey" type="button" aria-label="Show key" aria-pressed="false">Show</button></span>
       </label>
       <label class="check"><input type="checkbox" id="remember"> Remember the key on this computer</label>
+      <div class="srcs"><label>Beam rebar from
+        <select id="beamSrc"><option value="tables">Rebar tables</option><option value="design">Concrete Design (paste)</option></select>
+      </label><label>Column rebar from
+        <select id="colSrc"><option value="tables">Rebar tables</option><option value="design">Concrete Design (paste)</option></select>
+      </label></div>
       <button id="connect" type="submit" class="primary">Load model from Gen NX</button>
       <button id="openJson" type="button" class="primary open-proj">Open project…</button>
       <div id="loadProg" class="prog" role="progressbar" aria-label="Reading the model" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
@@ -53,6 +58,23 @@
     <div class="revbtns"><button value="saveold" id="revSaveOld">Save the current version first</button><button value="update" class="primary">Update</button><button value="cancel">Cancel</button></div>
   </form>
 </dialog>
+<dialog id="designDlg" aria-labelledby="designTitle">
+  <form method="dialog">
+    <div class="dlg-head"><h2 id="designTitle">Rebar from Concrete Design</h2></div>
+    <p class="muted">For beams and columns separately: keep the rebar tables (Modify Beam / Column Rebar Data, Rebar Input for Checking) or use the Gen NX design output. In Gen NX open <b>Design &gt; Concrete Code Design &gt; Beam Design</b> (or <b>Column Design</b>) and its result table, click the table, press Ctrl+A then Ctrl+C, and paste it below. Members of one section with different bars become separate types (B2A3-A, B2A3-B ...). The paste is kept in the project file.</p>
+    <fieldset class="dsec"><legend>Beams</legend>
+      <select id="designBeamUse" aria-label="Beam rebar from"><option value="design">Concrete Design output (Beam Design table)</option><option value="tables">Rebar tables (Gen NX rebar data)</option></select>
+      <textarea id="designBeamText" rows="5" spellcheck="false" aria-label="Beam Design table" placeholder="Paste the Beam Design table here (MEMB	SEL	Section	...	Rebar	...	Stirrup)"></textarea>
+      <p id="designBeamInfo" class="muted" role="status"></p>
+    </fieldset>
+    <fieldset class="dsec"><legend>Columns</legend>
+      <select id="designColUse" aria-label="Column rebar from"><option value="design">Concrete Design output (Column Design table)</option><option value="tables">Rebar tables (Gen NX rebar data)</option></select>
+      <textarea id="designColText" rows="5" spellcheck="false" aria-label="Column Design table" placeholder="Paste the Column Design table here (MEMB	SEL	Section	...	V-Rebar	...	H-Rebar.end)"></textarea>
+      <p id="designColInfo" class="muted" role="status"></p>
+    </fieldset>
+    <div class="revbtns"><button value="use" class="primary" id="designOk">Use</button><button value="cancel">Cancel</button></div>
+  </form>
+</dialog>
 <dialog id="logDlg" aria-labelledby="logTitle">
   <div class="dlg-head"><h2 id="logTitle">Version log</h2><button type="button" id="closeLog" aria-label="Close">Close</button></div>
   <div id="logBody"></div>
@@ -69,7 +91,7 @@
     <section class="modelbox" aria-labelledby="modelHead">
       <h2 id="modelHead">Model</h2>
       <p id="summary" class="summary"></p>
-      <div id="dataDl" class="row2" hidden><button type="button" id="saveProj" class="primary" title="Ctrl+S">Save project</button><button type="button" id="saveAs" title="Ctrl+Shift+S">Save as…</button><button type="button" id="updateModel" title="Read the model again from Gen NX; settings and rebar edits stay">Update model from Gen NX</button><button type="button" data-export="csv">Element list CSV</button></div>
+      <div id="dataDl" class="row2" hidden><button type="button" id="saveProj" class="primary" title="Ctrl+S">Save project</button><button type="button" id="saveAs" title="Ctrl+Shift+S">Save as…</button><button type="button" id="updateModel" title="Read the model again from Gen NX; settings and rebar edits stay">Update model from Gen NX</button><button type="button" data-export="csv">Element list CSV</button><button type="button" id="designBtn" title="Beam and column rebar: rebar tables or the Gen NX Concrete Design output">Rebar source…</button></div>
       <button id="changeModel" type="button" class="wide">Change project or model</button>
     </section>
   </aside>

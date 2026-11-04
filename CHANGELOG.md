@@ -2,6 +2,16 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.26 (2026-11-04)
+
+Requested by Arnold · edited by Claude
+
+- Rebar source for beams and for columns, each on its own: the rebar tables (Modify Beam / Column Rebar Data, Rebar Input for Checking) as before, or the Gen NX Concrete Design output. Chosen on the start page next to the MAPI-Key (Beam rebar from / Column rebar from); with Concrete Design a dialog opens after the model is read to paste the result tables. Later: Rebar source… in the Model panel.
+- Beam Design table (Design > Concrete Code Design > Beam Design, Ctrl+A, Ctrl+C in the result table): top and bottom bars and stirrups at I, M and J of each member; "6-2-D19" = two layers of 6 and 2 D19, "2-D10 @280" = 2 legs D10 at 280 mm; Failure rows are counted and drawn without stirrups.
+- Column Design table: main bars "18-5-D22" = 18 D22 in all, 5 on each face along H (as NUM / ROW in Modify Column Rebar Data); ties "5-D13 @320" = 5 legs of D13 at the ends and at mid-height.
+- MEMB is read as the element id (design per element), or as the design member and its elements when the section only matches that way. Elements of one section with different designed bars become separate types (B2A3, B2A3-A, B2A3-B ...), in the plans, sections, schedule, shop drawings and BBS.
+- The pasted tables are kept in the project file (CDESIGN) and stay through Update model from Gen NX; paste again after a new design run. Rebar edits made here still apply on top.
+
 ## 3.25 (2026-11-04)
 
 Requested by Arnold · edited by Claude
