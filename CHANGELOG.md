@@ -2,6 +2,12 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.24 (2026-11-04)
+
+Requested by Arnold · edited by Claude
+
+- Rebar detail: Beam plans: main bars, Beam plans: stirrups and Beam sections no longer disappear when the model has no beam rebar (Gen NX Modify Beam Rebar Data / Rebar Input for Checking empty). They stay in the row with 0 sheets and say why they are empty and how to add the rebar; if reading the beam rebar (REBB) from Gen NX failed, the error is shown there too.
+
 ## 3.23 (2026-11-02)
 
 Requested by Kevin · edited by Claude
