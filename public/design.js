@@ -90,14 +90,23 @@ export function parseColumnDesign(text) {
   return out;
 }
 
-// the elements a design row stands for: the element with that id when its section matches (design per element),
-// else the elements of design member MEMB
-export function designElems(id, d, model, raw) {
-  const byId = new Map(model.elems.map(e => [e.id, e]));
-  const e = byId.get(+id), members = tableOf(raw.MEMB, "MEMB");
-  const memb = (members[id]?.AELEM || []).map(Number).filter(x => byId.has(x));
-  if (e && (!d.sect || e.sect === d.sect)) return [e.id];
-  if (memb.length && (!d.sect || memb.every(x => byId.get(x).sect === d.sect))) return memb;
-  if (e) return [e.id];
-  return memb;
+// MEMB in the design tables is the design member (MEMB table, Design > Member Assignment) when members were assigned,
+// else the element id. Decided once per table: whichever reading matches the section of more rows. Element ids and
+// member ids overlap, so reading row by row put a member's bars on the element that happened to share its number.
+export function designMapper(rows, model, raw) {
+  const byId = new Map(model.elems.map(e => [e.id, e])), members = tableOf(raw.MEMB, "MEMB");
+  const membElems = id => (members[id]?.AELEM || []).map(Number).filter(x => byId.has(x));
+  let asElem = 0, asMemb = 0;
+  for (const [id, d] of Object.entries(rows)) {
+    const e = byId.get(+id), me = membElems(id);
+    if (e && (!d.sect || e.sect === d.sect)) asElem++;
+    if (me.length && (!d.sect || me.every(x => byId.get(x).sect === d.sect))) asMemb++;
+  }
+  const byMember = asMemb > asElem;
+  return (id, d) => {
+    const me = membElems(id), e = byId.get(+id);
+    if (byMember && me.length) return me;
+    if (e) return [e.id];
+    return me; // an id that is only a member
+  };
 }

@@ -1,7 +1,10 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.26";
+export const VERSION = "3.27";
 export const CHANGELOG = [
+  { version: "3.27", date: "2026-11-04", by: "Arnold", editor: "Claude", changes: [
+    "Concrete Design rebar with Member Assignment: MEMB in the pasted Beam / Column Design table is now read as the design member (all its elements) when members were assigned in Gen NX, decided for the whole table by which reading matches the sections. Before, a member's bars went only to the element that happened to have the same number, so the rest of the member showed the plain section name in red (e.g. TB46 instead of TB46-C, G613 instead of G613-B).",
+  ] },
   { version: "3.26", date: "2026-11-04", by: "Arnold", editor: "Claude", changes: [
     "Rebar source for beams and for columns, each on its own: the rebar tables (Modify Beam / Column Rebar Data, Rebar Input for Checking) as before, or the Gen NX Concrete Design output. Chosen on the start page next to the MAPI-Key (Beam rebar from / Column rebar from); with Concrete Design a dialog opens after the model is read to paste the result tables. Later: Rebar source\u2026 in the Model panel.",
     "Beam Design table (Design > Concrete Code Design > Beam Design, Ctrl+A, Ctrl+C in the result table): top and bottom bars and stirrups at I, M and J of each member; \"6-2-D19\" = two layers of 6 and 2 D19, \"2-D10 @280\" = 2 legs D10 at 280 mm; Failure rows are counted and drawn without stirrups.",
