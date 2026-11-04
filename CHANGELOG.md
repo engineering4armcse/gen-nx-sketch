@@ -2,6 +2,13 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.25 (2026-11-04)
+
+Requested by Arnold · edited by Claude
+
+- Fixed the error "Cannot read properties of undefined (reading 'sect')" when building the beam shop drawings (a span with no element of its own, e.g. two supports at the same point). The same line passed a section number where the rebar type was expected, so every beam in the shop drawings and the BBS was drawn and measured as 300 x 500 instead of its own section: now each span uses its real B x H (stirrup and bar lengths in the BBS change with it).
+- Model unit: when the model has no unit (Gen NX did not return the UNIT table, or a file saved without it) the app no longer assumes metres, which drew a model in mm 1000 times too large. It guesses M, CM or MM from the section sizes (or the element lengths) and says so in red next to the unit in the Model panel.
+
 ## 3.24 (2026-11-04)
 
 Requested by Arnold · edited by Claude

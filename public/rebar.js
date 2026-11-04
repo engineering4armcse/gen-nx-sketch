@@ -731,6 +731,6 @@ export function colBars(model, det) {
     return { bar: l.bar, n: 2 * nx + 2 * ny - 4, dc: l.dc };
   }) };
 }
-export const beamBox = (model, det) => sectionBox(model, det.sect);
+export const beamBox = (model, det) => sectionBox(model, det?.sect);
 // column section sketch for the shop drawing tables (same drawing as the schedule)
 export const drawColSection = (A, model, det, cx, cy, k) => drawColumnSection(A, sectionBox(model, det.sect), det, cx, cy, k);

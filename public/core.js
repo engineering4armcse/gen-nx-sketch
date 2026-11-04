@@ -68,8 +68,12 @@ function parseSect(id, s, f) {
 
 export function normalizeModel(raw) {
   const unitRow = Object.values(tableOf(raw.UNIT, "UNIT"))[0] || {};
-  const dist = String(unitRow.DIST || "M").toUpperCase();
-  const f = UNIT_TO_M[dist] ?? 1;
+  // no UNIT table (read failed, or a file saved without it): guess from the element lengths instead of assuming metres,
+  // which drew a model in mm 1000 times too large. Typical spans: 2-12 m, 200-1200 cm, 2000-12000 mm.
+  const given = String(unitRow.DIST || "").toUpperCase();
+  const dist = UNIT_TO_M[given] ? given : guessUnit(raw);
+  const unitGuessed = !UNIT_TO_M[given];
+  const f = UNIT_TO_M[dist];
 
   const nodes = new Map();
   for (const [id, n] of Object.entries(tableOf(raw.NODE, "NODE")))
@@ -114,7 +118,24 @@ export function normalizeModel(raw) {
   // Design member assignment: element -> member id
   const memberOf = new Map();
   for (const [mid, mb] of Object.entries(tableOf(raw.MEMB, "MEMB"))) for (const id of mb.AELEM || []) memberOf.set(+id, +mid);
-  return { unit: dist, nodes, sects, thick, stories, elems, memberOf };
+  return { unit: dist, unitGiven: given, unitGuessed, nodes, sects, thick, stories, elems, memberOf };
+}
+
+// the file's own unit from the section depths (beams and columns 0.15-2 m deep: under 5 -> M, under 160 -> CM, else MM),
+// or from the element lengths (2-12 m spans) when no section has dimensions
+function guessUnit(raw) {
+  const med = a => a.sort((x, y) => x - y)[a.length >> 1];
+  const hs = Object.entries(tableOf(raw.SECT, "SECT")).map(([id, s]) => parseSect(+id, s, 1).h).filter(h => h > 0);
+  if (hs.length) { const h = med(hs); return h < 5 ? "M" : h < 160 ? "CM" : "MM"; }
+  const nodes = tableOf(raw.NODE, "NODE"), Ls = [];
+  for (const e of Object.values(tableOf(raw.ELEM, "ELEM"))) {
+    const [a, b] = (e.NODE || []).map(n => nodes[n]);
+    if (!a || !b || !LINE_TYPES.has(String(e.TYPE || "BEAM").toUpperCase())) continue;
+    const L = Math.hypot((+b.X || 0) - (+a.X || 0), (+b.Y || 0) - (+a.Y || 0), (+b.Z || 0) - (+a.Z || 0));
+    if (L > 0) Ls.push(L);
+  }
+  if (!Ls.length) return "M";
+  const L = med(Ls); return L > 1500 ? "MM" : L > 60 ? "CM" : "M";
 }
 
 function normal(ns) {

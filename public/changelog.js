@@ -1,7 +1,11 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.24";
+export const VERSION = "3.25";
 export const CHANGELOG = [
+  { version: "3.25", date: "2026-11-04", by: "Arnold", editor: "Claude", changes: [
+    "Fixed the error \"Cannot read properties of undefined (reading 'sect')\" when building the beam shop drawings (a span with no element of its own, e.g. two supports at the same point). The same line passed a section number where the rebar type was expected, so every beam in the shop drawings and the BBS was drawn and measured as 300 x 500 instead of its own section: now each span uses its real B x H (stirrup and bar lengths in the BBS change with it).",
+    "Model unit: when the model has no unit (Gen NX did not return the UNIT table, or a file saved without it) the app no longer assumes metres, which drew a model in mm 1000 times too large. It guesses M, CM or MM from the section sizes (or the element lengths) and says so in red next to the unit in the Model panel.",
+  ] },
   { version: "3.24", date: "2026-11-04", by: "Arnold", editor: "Claude", changes: [
     "Rebar detail: Beam plans: main bars, Beam plans: stirrups and Beam sections no longer disappear when the model has no beam rebar (Gen NX Modify Beam Rebar Data / Rebar Input for Checking empty). They stay in the row with 0 sheets and say why they are empty and how to add the rebar; if reading the beam rebar (REBB) from Gen NX failed, the error is shown there too.",
   ] },

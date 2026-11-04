@@ -123,7 +123,7 @@ export function beamLines(model, rebar, opts = {}) {
       const A = supports[i - 1], B = supports[i], mid = (A.s + B.s) / 2;
       const inSpan = els.filter(b => { const m = (s(b.nodes[0]) + s(b.nodes[1])) / 2; return m > A.s && m < B.s; });
       const cnt = new Map(); for (const b of inSpan) { const d = detOf.get(b.id); if (d) cnt.set(d, (cnt.get(d) || 0) + Math.abs(s(b.nodes[1]) - s(b.nodes[0]))); }
-      const det = [...cnt].sort((a, b) => b[1] - a[1])[0]?.[0] || null, sec = beamBox(model, (det || { sect: inSpan[0]?.sect }).sect);
+      const det = [...cnt].sort((a, b) => b[1] - a[1])[0]?.[0] || null, sec = beamBox(model, det || { sect: inSpan[0]?.sect }); // beamBox takes the type (or { sect }), not a section id
       spans.push({ s0: A.s, s1: B.s, a0: A.s + A.ahead, a1: B.s - B.back, Ln: Math.max(0.2, B.s - B.back - (A.s + A.ahead)), det, B: sec.B, H: sec.H, name: det?.name || model.sects.get(inSpan[0]?.sect)?.name || "-", mid, matl: inSpan[0]?.matl, elems: inSpan.map(b => b.id) });
     }
     if (!spans.some(x => x.det)) continue;
