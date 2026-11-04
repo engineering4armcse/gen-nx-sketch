@@ -2,6 +2,12 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.28 (2026-11-04)
+
+Requested by Arnold · edited by Claude
+
+- Concrete Design with Member Assignment, take 2: Gen NX lists each assigned member under the number of one of its elements (member 240-246 as "240"), not under the member number. A row whose element belongs to an assigned member now covers every element of that member (TB46-C along the whole span instead of TB46 in red on 241-246). Rows designed per element (several rows in one member) keep their own element. Checked on VIHARA KOSAMBI: all 1475 concrete beams get a type.
+
 ## 3.27 (2026-11-04)
 
 Requested by Arnold · edited by Claude

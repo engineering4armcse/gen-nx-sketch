@@ -90,23 +90,18 @@ export function parseColumnDesign(text) {
   return out;
 }
 
-// MEMB in the design tables is the design member (MEMB table, Design > Member Assignment) when members were assigned,
-// else the element id. Decided once per table: whichever reading matches the section of more rows. Element ids and
-// member ids overlap, so reading row by row put a member's bars on the element that happened to share its number.
+// MEMB in the design tables: with Member Assignment (Design > Member Assignment, MEMB table) Gen NX designs each member
+// once and lists it under the number of one of its elements (usually the first: member 240-246 shows as "240"). So a
+// row whose element belongs to an assigned member covers all elements of that member. When several rows fall in the
+// same member (designed per element), each row keeps its own element.
 export function designMapper(rows, model, raw) {
-  const byId = new Map(model.elems.map(e => [e.id, e])), members = tableOf(raw.MEMB, "MEMB");
-  const membElems = id => (members[id]?.AELEM || []).map(Number).filter(x => byId.has(x));
-  let asElem = 0, asMemb = 0;
-  for (const [id, d] of Object.entries(rows)) {
-    const e = byId.get(+id), me = membElems(id);
-    if (e && (!d.sect || e.sect === d.sect)) asElem++;
-    if (me.length && (!d.sect || me.every(x => byId.get(x).sect === d.sect))) asMemb++;
-  }
-  const byMember = asMemb > asElem;
+  const byId = new Map(model.elems.map(e => [e.id, e])), memberOf = new Map();
+  for (const [mid, mb] of Object.entries(tableOf(raw.MEMB, "MEMB"))) for (const x of mb.AELEM || []) memberOf.set(+x, (mb.AELEM || []).map(Number).filter(y => byId.has(y)));
+  const hits = new Map();
+  for (const id of Object.keys(rows)) { const me = memberOf.get(+id); if (me) hits.set(me, (hits.get(me) || 0) + 1); }
   return (id, d) => {
-    const me = membElems(id), e = byId.get(+id);
-    if (byMember && me.length) return me;
-    if (e) return [e.id];
-    return me; // an id that is only a member
+    const e = byId.get(+id), me = memberOf.get(+id);
+    if (me && hits.get(me) === 1 && (!d.sect || me.every(x => byId.get(x).sect === d.sect))) return me;
+    return e ? [e.id] : [];
   };
 }

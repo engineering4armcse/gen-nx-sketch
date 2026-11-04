@@ -1,7 +1,10 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.27";
+export const VERSION = "3.28";
 export const CHANGELOG = [
+  { version: "3.28", date: "2026-11-04", by: "Arnold", editor: "Claude", changes: [
+    "Concrete Design with Member Assignment, take 2: Gen NX lists each assigned member under the number of one of its elements (member 240-246 as \"240\"), not under the member number. A row whose element belongs to an assigned member now covers every element of that member (TB46-C along the whole span instead of TB46 in red on 241-246). Rows designed per element (several rows in one member) keep their own element. Checked on VIHARA KOSAMBI: all 1475 concrete beams get a type.",
+  ] },
   { version: "3.27", date: "2026-11-04", by: "Arnold", editor: "Claude", changes: [
     "Concrete Design rebar with Member Assignment: MEMB in the pasted Beam / Column Design table is now read as the design member (all its elements) when members were assigned in Gen NX, decided for the whole table by which reading matches the sections. Before, a member's bars went only to the element that happened to have the same number, so the rest of the member showed the plain section name in red (e.g. TB46 instead of TB46-C, G613 instead of G613-B).",
   ] },
