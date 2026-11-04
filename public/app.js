@@ -87,12 +87,13 @@ function progress(i, label) {
   $("#progLabel").textContent = label; $("#progCount").textContent = `${pct}%`;
 }
 async function fetchTables() {
-  const raw = {};
+  const raw = {}, errors = {};
   for (const [i, [t, name]] of TABLES.entries()) {
     progress(i, `Reading ${name} (${t}) from Gen NX…`); $("#viewStatus").textContent = `Reading ${t} from Gen NX…`;
     try { raw[t] = await midasGet("/db/" + t); }
-    catch (e) { if (t === "NODE" || t === "ELEM") throw e; raw[t] = {}; }
+    catch (e) { if (t === "NODE" || t === "ELEM") throw e; raw[t] = {}; errors[t] = e.message; }
   }
+  Object.defineProperty(raw, "_readErrors", { value: errors }); // optional tables that failed: said in the empty beam rebar sheets, never saved
   if (!Object.keys(C.tableOf(raw.NODE, "NODE")).length) throw new Error("The model has no nodes. Is the right model open in Gen NX?");
   return raw;
 }
@@ -233,24 +234,37 @@ function shopViews() {
   return vs;
 }
 const BBS_VIEW = { id: "shop:bbs", kind: "bbs", title: "BAR BENDING SCHEDULE" }; // not a sheet: shows the schedule pane
+// A model with concrete beams but no beam rebar still lists the three beam drawing types (they used to vanish, so the tab
+// looked incomplete): each holds one note sheet saying why it is empty. Not a drawing: no items, never exported.
+function noBeamRebar(key) {
+  const m = state.model;
+  if (state.rebar?.beams.length || !m?.elems.some(e => e.kind === "beam" && String(e.matlType).toUpperCase() !== "STEEL")) return [];
+  return [NOTE_VIEWS[key]];
+}
+const NOTE_VIEWS = Object.fromEntries(["main", "stir", "sect"].map(k => [k, { id: "rebar:nobeam:" + k, kind: "note", title: "NO BEAM REBAR DATA" }])); // same objects every time: the view list compares by identity
+function noBeamRebarHtml() {
+  const err = state.raw?._readErrors?.REBB;
+  return `<p class="empty">No beam rebar in this model, so there are no beam rebar plans or beam sections yet. They are drawn from Gen NX <b>Design &gt; Modify Beam Rebar Data</b> (or <b>Rebar Input for Checking</b>). Enter the beam rebar there and use <b>Update model from Gen NX</b>, or add a beam type in the sidebar under <b>Edit rebar</b>.${err ? `<br><br>Reading the beam rebar (REBB) from Gen NX failed: ${esc(err)}` : ""}</p>`;
+}
 
 function viewGroups(tab = state.tab) {
-  const by = f => state.views.filter(f);
+  const by = f => state.views.filter(f), or = (vs, f) => (vs.length ? vs : f());
   const groups = tab === "rebar"
-    ? [["Column plans", by(v => v.sub === "colplanrebar")], ["Column schedule & sections", by(v => v.sub === "colrebar")], ["Beam plans: main bars", by(v => v.rebarKind === "main")], ["Beam plans: stirrups", by(v => v.rebarKind === "stir")], ["Beam sections", by(v => v.sub === "beamrebar")]]
+    ? [["Column plans", by(v => v.sub === "colplanrebar")], ["Column schedule & sections", by(v => v.sub === "colrebar")], ["Beam plans: main bars", or(by(v => v.rebarKind === "main"), () => noBeamRebar("main"))], ["Beam plans: stirrups", or(by(v => v.rebarKind === "stir"), () => noBeamRebar("stir"))], ["Beam sections", or(by(v => v.sub === "beamrebar"), () => noBeamRebar("sect"))]]
     : tab === "shop" ? [["Column", by(v => v.sub === "shopcol")], ["Beam", by(v => v.sub === "shopbeam")], ["Bar bending schedule", state.bbs && (state.bbs.beams.length || state.bbs.cols.length) ? [BBS_VIEW] : []]]
     : [["Column plans", by(v => v.sub === "column")], ["Beam plans", by(v => v.sub === "beam")], ["Elevations", by(v => v.kind === "elev")]];
   return groups.filter(g => g[1].length);
 }
 const tabViews = () => viewGroups().flatMap(g => g[1]);
+const nSheets = vs => (vs[0]?.kind === "note" ? 0 : vs.length); // a note sheet counts as none
 function renderViewList() {
   state.groups = viewGroups();
   const cur = current() || tabViews()[0];
   const gi = Math.max(0, state.groups.findIndex(g => g[1].includes(cur)));
-  $("#viewType").innerHTML = state.groups.map(([h, vs], i) => `<option value="${i}">${h} (${vs.length})</option>`).join("");
+  $("#viewType").innerHTML = state.groups.map(([h, vs], i) => `<option value="${i}">${h} (${nSheets(vs)})</option>`).join("");
   $("#viewType").value = gi;
   // the drawing types as one row of buttons (the select stays for the logic and narrow screens)
-  $("#groupBar").innerHTML = state.groups.map(([h, vs], i) => `<button type="button" role="tab" data-g="${i}" aria-selected="${i === gi}" class="${i === gi ? "on" : ""}">${h}<span class="n">${vs.length}</span></button>`).join("");
+  $("#groupBar").innerHTML = state.groups.map(([h, vs], i) => `<button type="button" role="tab" data-g="${i}" aria-selected="${i === gi}" class="${i === gi ? "on" : ""}">${h}<span class="n">${nSheets(vs)}</span></button>`).join("");
   fillViewSel();
 }
 // the export choice names the drawing type it covers: "Column schedule & sections (6 sheets)"
@@ -274,6 +288,7 @@ const current = () => tabViews().find(v => v.id === state.currentId);
 function drawCurrent() {
   const v = current(), host = $("#sheet");
   if (state.tab === "shop") { const bbs = v?.kind === "bbs"; $("#pane2d").hidden = bbs; $("#paneShop").hidden = !bbs; if (bbs) { $("#viewTitle").textContent = ""; showShop(); return; } }
+  if (v?.kind === "note") { host.innerHTML = noBeamRebarHtml(); $("#viewTitle").textContent = ""; return; }
   if (!v) {
     host.innerHTML = state.tab === "rebar"
       ? '<p class="empty">This model has no rebar data. Gen NX keeps it under Design: <b>Modify Beam Rebar Data</b> (beams), <b>Modify Column Rebar Data</b> (columns) and <b>Rebar Input for Checking</b>. Enter or design the rebar there and load the model again, or add it in the sidebar under Edit rebar. The demo model shows sample details.</p>'
@@ -513,7 +528,7 @@ async function bundleHtml() {
   const title = $("#project").value.trim() || "Gen NX Sketch", m = meta();
   const html3d = build3dHtml(data3d(), { title: "3D Structure", colorMode: $("#colorMode").value === "section" ? "section" : "kind", scripts });
   const views = [], hits = [];
-  for (const tab of ["2d", "rebar"]) for (const [group, vs] of viewGroups(tab)) for (const v of vs) {
+  for (const tab of ["2d", "rebar"]) for (const [group, vs] of viewGroups(tab)) for (const v of vs.filter(v => v.items)) {
     for (const h of v.hits || []) { const [x0, y0, x1, y1] = hitRect(v, h); hits.push({ elems: h.elems, view: views.length, rect: [x0, y0, x1 - x0, y1 - y0].map(n => +n.toFixed(2)) }); }
     views.push({ tab, group, title: v.title, svg: toSvg(v, m) });
   }
@@ -535,9 +550,9 @@ const need = () => { if (!state.model) { status("Load a model first.", "err"); r
 
 const EXPORTS = {
   // scope "This view" or "All views"
-  pdf() { const vs = scoped(); if (vs.length) toPdf(vs, meta()).save(`${fileBase()}_${scopeName(vs)}.pdf`); },
+  pdf() { const vs = scoped(); if (!vs.length) return status("No drawing to export here: this drawing type has no sheets.", "err"); toPdf(vs, meta()).save(`${fileBase()}_${scopeName(vs)}.pdf`); },
   dxf() {
-    const vs = scoped(); if (!vs.length) return;
+    const vs = scoped(); if (!vs.length) return status("No drawing to export here: this drawing type has no sheets.", "err");
     download(new Blob([C.buildDxf(vs, { units: $("#dxfUnits").value, colorMode: $("#colorMode").value })], { type: "application/dxf" }), `${fileBase()}_${scopeName(vs)}.dxf`);
   },
   async html3d() {
@@ -551,7 +566,7 @@ const EXPORTS = {
     try {
       const base = fileBase(), root = `${base}_Sketch/`, files = [], m = meta();
       const pre = (t, gs) => gs.map(([n, vs]) => [`${t} - ${n}`, vs]); // file names say which tab: "Rebar - Column plans", "Shop - Beam"
-      const groups = [...pre("Sketch", viewGroups("2d")), ...pre("Rebar", viewGroups("rebar")), ...pre("Shop", viewGroups("shop").filter(g => g[1][0]?.items))];
+      const groups = [...pre("Sketch", viewGroups("2d")), ...pre("Rebar", viewGroups("rebar")), ...pre("Shop", viewGroups("shop"))].filter(g => g[1][0]?.items);
       const total = groups.reduce((s, g) => s + g[1].length, 0);
       const tick = () => new Promise(r => setTimeout(r)); // let the status line repaint
       for (const [gi, [name, vs]] of groups.entries()) {

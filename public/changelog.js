@@ -1,7 +1,10 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.23";
+export const VERSION = "3.24";
 export const CHANGELOG = [
+  { version: "3.24", date: "2026-11-04", by: "Arnold", editor: "Claude", changes: [
+    "Rebar detail: Beam plans: main bars, Beam plans: stirrups and Beam sections no longer disappear when the model has no beam rebar (Gen NX Modify Beam Rebar Data / Rebar Input for Checking empty). They stay in the row with 0 sheets and say why they are empty and how to add the rebar; if reading the beam rebar (REBB) from Gen NX failed, the error is shown there too.",
+  ] },
   { version: "3.23", date: "2026-11-02", by: "Kevin", editor: "Claude", changes: [
     "PDF and DXF export: new choice between This view and All views that exports only the sheets of the drawing type picked above, e.g. \"Column schedule & sections (6 sheets)\" or \"Beam plans: stirrups\". The file is named after that drawing type.",
   ] },
