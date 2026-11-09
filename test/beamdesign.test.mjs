@@ -1,4 +1,4 @@
-// node --test test/  — hand calculations for public/beamdesign.js (SNI 2847:2019)
+// npm test — hand calculations for public/beamdesign.js (SNI 2847:2019)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { asRequired, perLayer, chooseBars, designShear, designBeam, rationalize, beamWeight, DEFAULTS } from "../public/beamdesign.js";
