@@ -2,6 +2,6 @@
   "name": "gen-nx-sketch",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node server.mjs" },
+  "scripts": { "start": "node server.mjs", "test": "node --test test/" },
   "engines": { "node": ">=18" }
 }
