@@ -46,7 +46,6 @@
         <p class="prog-text"><span id="progLabel"></span><span id="progCount"></span></p>
       </div>
       <p id="status" class="status" role="status"></p>
-      <button id="pickFallback" type="button" class="link" hidden>Choose the file with the browser's other file dialog</button>
       <div id="restoreBar" class="restore" hidden><p id="restoreText"></p><div class="row"><button type="button" id="restoreYes" class="primary">Restore</button><button type="button" id="restoreNo">Discard</button></div></div>
       <section id="recent" class="recent" aria-labelledby="recentHead" hidden><h2 id="recentHead">Recent projects</h2><ul id="recentList"></ul></section>
       <details class="adv" id="connAdv">
@@ -102,7 +101,7 @@
     <section class="modelbox" aria-labelledby="modelHead">
       <h2 id="modelHead">Model</h2>
       <p id="summary" class="summary"></p>
-      <div id="dataDl" class="row2" hidden><button type="button" id="saveProj" class="primary" title="Ctrl+S">Save project</button><button type="button" id="saveAs" title="Ctrl+Shift+S">Save as…</button><button type="button" id="updateModel" title="Read the model again from Gen NX; settings and rebar edits stay">Update model from Gen NX</button><button type="button" data-export="csv">Element list CSV</button><button type="button" id="designBtn" title="Beam and column rebar: rebar tables or the Gen NX Concrete Design output">Rebar source…</button></div>
+      <div id="dataDl" class="row2" hidden><button type="button" id="saveProj" class="primary" title="Downloads the project file (Ctrl+S)">Save project</button><button type="button" id="updateModel" title="Read the model again from Gen NX; settings and rebar edits stay">Update model from Gen NX</button><button type="button" id="designBtn" title="Beam and column rebar: rebar tables or the Gen NX Concrete Design output">Rebar source…</button></div>
       <button id="changeModel" type="button" class="wide">Change project or model</button>
     </section>
   </aside>

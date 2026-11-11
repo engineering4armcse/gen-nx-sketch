@@ -1,6 +1,6 @@
 # Gen NX Sketch
 
-Version 3.30. What changed in each version, and who asked for it, is in [CHANGELOG.md](CHANGELOG.md) and on the start page under *What changed in each version*.
+Version 3.31. What changed in each version, and who asked for it, is in [CHANGELOG.md](CHANGELOG.md) and on the start page under *What changed in each version*.
 
 Web app that reads a MIDAS Gen NX model through the MIDAS API and draws sketch plans and elevations for drafters.
 
@@ -23,9 +23,9 @@ Web app that reads a MIDAS Gen NX model through the MIDAS API and draws sketch p
 
 ## Saving projects
 
-- **Save project / Ctrl+S:** Chrome and Edge ask once where to save, then Ctrl+S overwrites that file. Other browsers (and phones) download it. **Save as… / Ctrl+Shift+S** writes a new file.
+- **Save project / Ctrl+S:** downloads `<Project>_project.json` (the browser's downloads, Ctrl+J). Each save is a new download; keep the latest in the project folder.
 - **The file** is the Model JSON with two extra keys: `GNX_PROJECT` (id, name, saved at, revisions) and `GNX_SETTINGS` (project name, grid, display, text size, slab, DXF units). Gen NX tables and `REBAR_USER` stay at the top level, so older versions still open it. The MAPI-Key is never in the file.
-- **Open project** takes a project file, an old Model JSON or a Gen NX database export.
+- **Open JSON file** (start page, From a JSON file, or drop the file on the page) takes a project file, an old Model JSON or a Gen NX database export.
 - **Recent projects** on the start page (last 10, in this browser) reopen the file, or the browser copy if the file cannot be read. Unsaved work is autosaved in the browser and offered back with **Restore**.
 - **Update model from Gen NX** (sidebar) reads a revised model for the open project, shows what changed, can save the current version first as `_R0.json`, keeps the settings and rebar edits, and lists what needs checking.
 

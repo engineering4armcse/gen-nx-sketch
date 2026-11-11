@@ -1,7 +1,12 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.30";
+export const VERSION = "3.31";
 export const CHANGELOG = [
+  { version: "3.31", date: "2026-11-11", by: "Arnold", editor: "Claude", changes: [
+    "One Save project button (Ctrl+S): it always downloads <Project>_project.json (the browser's downloads, Ctrl+J). Save as… is gone; the write-to-the-same-file dialog of Chrome/Edge saved nothing in some browsers.",
+    "Open JSON file uses the browser's plain file dialog, which works in every browser. Dropping the file on the start page still works.",
+    "Element list CSV removed from the side panel.",
+  ] },
   { version: "3.30", date: "2026-11-11", by: "Arnold", editor: "Claude", changes: [
     "Start page: choose From Gen NX (API) or From a JSON file. Each shows only what it needs: the MAPI-Key, Load model from Gen NX and the connection settings for the API; Open JSON file… for a project, Model JSON (…_model.json) or Gen NX database export, with no key and no Gen NX. The choice is remembered.",
     "Opening a JSON file no longer fails silently: when the browser's file dialog cannot open (it closes at once), the page says so and offers the other file dialog; a JSON file can also be dropped on the start page. A file that is not valid JSON or has no NODE table says why. Without a project name, the name comes from the file name.",
