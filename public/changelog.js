@@ -1,7 +1,10 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.28";
+export const VERSION = "3.29";
 export const CHANGELOG = [
+  { version: "3.29", date: "2026-11-11", by: "Arnold", editor: "Claude", changes: [
+    "\"The app did not start\" now says why: which app file is missing (e.g. design.js, added in 3.26, when a folder was only partly updated), whether index.html is older than app.js, and the script error itself. It is checked when the page has finished loading instead of after 3 seconds, so a slow connection no longer shows the message while the app is still loading, and it is cleared if the app starts late.",
+  ] },
   { version: "3.28", date: "2026-11-04", by: "Arnold", editor: "Claude", changes: [
     "Concrete Design with Member Assignment, take 2: Gen NX lists each assigned member under the number of one of its elements (member 240-246 as \"240\"), not under the member number. A row whose element belongs to an assigned member now covers every element of that member (TB46-C along the whole span instead of TB46 in red on 241-246). Rows designed per element (several rows in one member) keep their own element. Checked on VIHARA KOSAMBI: all 1475 concrete beams get a type.",
   ] },

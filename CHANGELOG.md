@@ -2,6 +2,12 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.29 (2026-11-11)
+
+Requested by Arnold · edited by Claude
+
+- "The app did not start" now says why: which app file is missing (e.g. design.js, added in 3.26, when a folder was only partly updated), whether index.html is older than app.js, and the script error itself. It is checked when the page has finished loading instead of after 3 seconds, so a slow connection no longer shows the message while the app is still loading, and it is cleared if the app starts late.
+
 ## 3.28 (2026-11-04)
 
 Requested by Arnold · edited by Claude
