@@ -106,7 +106,6 @@ function setStartMode(m) {
   const r = document.querySelector(`input[name="startFrom"][value="${m}"]`); if (r) r.checked = true;
   const file = m === "file";
   for (const [id, hide] of [["fromApi", file], ["connect", file], ["connAdv", file], ["fromFile", !file], ["openJson", !file]]) { const el = $("#" + id); if (el) el.hidden = hide; }
-  if (!file) { const f = $("#pickFallback"); if (f) f.hidden = true; }
 }
 // the rebar source picked on the start page, for a model just opened: ask for the pasted tables when Concrete Design is
 // picked and the project does not already use it
@@ -600,15 +599,6 @@ const EXPORTS = {
       status(`Output Sketch saved: ${total} drawings as PDF, DXF and HTML in ${base}_Sketch.zip.`, "ok");
     } finally { btn.disabled = false; busy(false); }
   },
-  csv() {
-    const m = state.model, q = v => `"${String(v ?? "").replace(/"/g, '""')}"`, f = v => +v.toFixed(4);
-    const rows = [["Elem", "Type", "Member type", "Section", "Material", "Design member", "Nodes", "Length (m)", "X1", "Y1", "Z1", "X2", "Y2", "Z2"]];
-    for (const e of m.elems) {
-      const a = m.nodes.get(e.nodes[0]), b = m.nodes.get(e.nodes[e.nodes.length > 2 ? 2 : 1]);
-      rows.push([e.id, e.type, C.KIND_LABEL[e.kind], e.sectName, e.matl, m.memberOf.get(e.id) ?? "", e.nodes.join(" "), e.L ? f(e.L) : "", f(a.x), f(a.y), f(a.z), f(b.x), f(b.y), f(b.z)]);
-    }
-    download(new Blob(["\ufeff" + rows.map(r => r.map(q).join(",")).join("\r\n")], { type: "text/csv" }), `${fileBase()}_elements.csv`);
-  },
 };
 
 // ---------- project: save, open, recent, autosave (3.3) ----------
@@ -642,53 +632,25 @@ function remember() {
   P.putRecent({ id: state.project.id, name: projName(), fileName: state.fileName, handle: state.handle || undefined, changedAt: Date.now(), unsaved: state.dirty, data, ...(state.dirty ? {} : { saved: data }) });
 }
 // Save: to the project's file when it has one (Chrome/Edge), else a new file (dialog) or a download.
-// asNew: Save as. copy: write the project to another file and stay on the current one (keeps a version before a revision)
-async function saveProject(asNew, copy = false, suggested) {
+// Save project: always a download of <Project>_project.json (the browser's Downloads folder, or where it asks). The file
+// system picker (write back to the same file) failed silently in some browsers, so it is not used.
+// copy: a copy under another name, the project stays as it is (keeps a version before a revision)
+async function saveProject(copy = false, suggested) {
   if (!state.model) return false;
-  const proj = currentProject(), text = JSON.stringify(proj), name = suggested || `${fileBase()}_project.json`;
-  busy(true);
+  const proj = currentProject(), text = JSON.stringify(proj, null, 1), name = suggested || `${fileBase()}_project.json`;
   try {
-    let handle = !asNew && !copy ? state.handle : null;
-    if (handle && state.fileTime) {
-      // another tab or another person may have saved the same file since it was opened here
-      try { const t = (await handle.getFile()).lastModified; if (t > state.fileTime + 1000 && !confirm(`${handle.name} was changed on disk at ${when(t)}, after you opened it. Overwrite it with this version?`)) { status("Not saved. Use Save as to keep both versions.", ""); return false; } } catch {}
-    }
-    if (!handle && P.canPickFiles()) { handle = await P.pickSaveFile(name); if (!handle) { status("Not saved.", ""); return false; } }
-    if (handle) {
-      const t = await P.writeHandle(handle, text);
-      if (copy) { status(`Saved a copy as ${handle.name}.`, "ok"); return true; }
-      state.handle = handle; state.fileName = handle.name; state.fileTime = t;
-    } else {
-      download(new Blob([text], { type: "application/json" }), name);
-      if (copy) { status(`Copy downloaded as ${name}.`, "ok"); return true; }
-      state.fileName = name;
-    }
+    download(new Blob([text], { type: "application/json" }), name);
+    if (copy) { status(`Copy downloaded as ${name}.`, "ok"); return true; }
+    state.fileName = name; state.handle = null;
     state.project = proj.GNX_PROJECT; setDirty(false); remember();
-    status(`Saved ${state.fileName} at ${hhmm(Date.now())}.` + (handle ? " Ctrl+S saves to this file again." : " Downloaded: keep it in the project folder; this browser cannot write to a file directly."), "ok");
+    status(`Saved: ${name} downloaded at ${hhmm(Date.now())} (see the browser's downloads, Ctrl+J). Open it again with Open JSON file on the start page.`, "ok");
     return true;
   } catch (e) {
-    status(`Not saved: ${e.message}. Try Save as to another folder; your work is still here and in this browser.`, "err"); return false;
-  } finally { busy(false); }
-}
-// Chrome/Edge open through the file system picker (Ctrl+S then saves back to the same file). Where that picker cannot
-// show (blocked by the browser or a policy, it fails at once, often as a silent "aborted"), the plain file dialog is
-// used from then on, and the person gets a link for it now: the click that was spent cannot open a second dialog.
-let noPicker = false;
-async function openFile() {
-  status("");
-  if (noPicker || !P.canPickFiles()) { $("#fileJson").click(); return; }
-  const t0 = performance.now();
-  try {
-    const h = await P.pickOpenFile();
-    if (h) { await openFromFile(await h.getFile(), h); return; }
-    if (performance.now() - t0 > 400) return; // closed by the person
-    throw new Error("the browser closed it at once");
-  } catch (e) {
-    noPicker = true;
-    status(`The file dialog did not open (${e.message}). Use the link below, or drop the JSON file on this page.`, "err");
-    $("#pickFallback").hidden = false;
+    status(`Not saved: ${e.message}. Your work is still here and in this browser.`, "err"); return false;
   }
 }
+// Open JSON file: the browser's plain file dialog
+function openFile() { status(""); $("#fileJson").click(); }
 async function openFromFile(f, handle = null) {
   if (!/\.json$/i.test(f.name) && f.type !== "application/json") { status(`${f.name} is not a JSON file. Open a project or Model JSON (.json).`, "err"); return; }
   busy(true); status(`Opening ${f.name}…`);
@@ -700,7 +662,6 @@ async function openFromFile(f, handle = null) {
     if (!Object.keys(C.tableOf(p.raw.NODE, "NODE")).length) throw new Error("no NODE table: it is not a Gen NX model");
     takeProject(f.name.replace(/(_model|_project)?\.json$/i, "").replace(/_/g, " "));
     openProject(p, p.project ? "Project file" : f.name, { handle, fileName: f.name, fileTime: f.lastModified });
-    $("#pickFallback").hidden = true;
     if (!p.project) status(`Opened ${f.name} (Model JSON without project settings). Save makes it a project file.`, "ok");
     else status(`Opened ${f.name}${p.project.savedAt ? `, saved ${when(p.project.savedAt)}` : ""}.`, "ok");
     askDesignSource();
@@ -750,7 +711,7 @@ async function updateFromMidas() {
   dlg.showModal();
   const choice = await new Promise(ok => { dlg.onclose = () => ok(dlg.returnValue); });
   if (choice === "cancel" || !choice) { status("Model not updated.", ""); return; }
-  if (choice === "saveold" && !(await saveProject(true, true, `${fileBase()}_R${(state.project.revisions || []).length}.json`))) { status("Model not updated: the current version was not saved.", "err"); return; }
+  if (choice === "saveold" && !(await saveProject(true, `${fileBase()}_R${(state.project.revisions || []).length}.json`))) { status("Model not updated: the current version was not saved.", "err"); return; }
   raw.REBAR_USER = state.raw.REBAR_USER || {};
   if (state.raw.CDESIGN) raw.CDESIGN = state.raw.CDESIGN; // pasted Concrete Design results stay; paste again after a new design run
   state.project.midasReadAt = new Date().toISOString();
@@ -803,17 +764,14 @@ function init() {
   setupStart();
   $("#startForm").onsubmit = e => { e.preventDefault(); takeProject(); startMode() === "file" ? openFile() : loadFromMidas(); };
   for (const r of document.querySelectorAll('input[name="startFrom"]')) r.onchange = () => { setStartMode(startMode()); status(""); saveSettings(); };
-  $("#pickFallback").onclick = () => $("#fileJson").click();
-  // drop a JSON file anywhere on the start page
+    // drop a JSON file anywhere on the start page
   $("#start").addEventListener("dragover", e => { if ([...e.dataTransfer.types].includes("Files")) { e.preventDefault(); document.body.classList.add("dropping"); } });
   $("#start").addEventListener("dragleave", e => { if (e.target === e.currentTarget) document.body.classList.remove("dropping"); });
   $("#start").addEventListener("drop", async e => {
     e.preventDefault(); document.body.classList.remove("dropping");
     const it = [...e.dataTransfer.items].find(i => i.kind === "file"); if (!it) return;
-    const hp = it.getAsFileSystemHandle?.(), f = it.getAsFile(); // the handle lets Ctrl+S save back to that file (Chrome/Edge)
     setStartMode("file"); takeProject();
-    let h = null; try { h = (await hp) || null; if (h?.kind !== "file") h = null; } catch {}
-    await openFromFile(f, h);
+    await openFromFile(it.getAsFile());
   });
   $("#demo").onclick = () => { takeProject("Demo building"); openProject({ raw: demoModel(), project: null, settings: null }, "Demo model"); };
   $("#openJson").onclick = () => { takeProject(); openFile(); };
@@ -837,15 +795,14 @@ function init() {
     $("#gridMode").value = "manual"; fillGridTables(); rebuild(); setDirty(true);
   };
   for (const id of ["remember", "base", "conn", "dxfUnits", "scope"]) $("#" + id).addEventListener("change", () => { state.connMode = null; saveSettings(); if (id === "dxfUnits" || id === "scope") setDirty(true); });
-  $("#saveProj").onclick = () => saveProject(false);
-  $("#saveAs").onclick = () => saveProject(true);
+  $("#saveProj").onclick = () => saveProject();
   $("#updateModel").onclick = updateFromMidas;
   $("#designBtn").onclick = () => openDesign();
   const designInfo = (k, parse, what) => { const t = $(`#design${k}Text`).value.trim(), el = $(`#design${k}Info`); if (!t) { el.textContent = el.dataset.kept || ""; return; } const r = parse(t), n = r.count; el.textContent = n ? `${n} ${what}(s) read${r.failed ? `, ${r.failed} with a failed design` : ""}.` + (r.errors.length ? " " + r.errors.slice(0, 3).join(" ") : "") : r.errors.join(" "); };
   $("#designBeamText").oninput = () => designInfo("Beam", parseBeamDesign, "beam member");
   $("#designColText").oninput = () => designInfo("Col", parseColumnDesign, "column member");
-  // Ctrl+S saves the project (to its file in Chrome/Edge), Ctrl+Shift+S asks for a new file
-  addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (state.model) saveProject(e.shiftKey); } });
+  // Ctrl+S saves (downloads) the project file
+  addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (state.model) saveProject(); } });
   addEventListener("beforeunload", e => { if (state.dirty) { autosaveNow(); e.preventDefault(); e.returnValue = ""; } });
   $("#viewType").onchange = () => { state.currentId = null; fillViewSel(); drawCurrent(); };
   $("#groupBar").onclick = e => { const b = e.target.closest("button[data-g]"); if (!b) return; const g = state.groups[+b.dataset.g]; if (!g) return; state.currentId = g[1][0].id; renderViewList(); drawCurrent(); }; // first sheet of that type

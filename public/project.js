@@ -1,7 +1,7 @@
 // Project files (3.3): one JSON holds the Gen NX tables, the rebar edits (REBAR_USER), the drawing settings (GNX_SETTINGS)
 // and who/when (GNX_PROJECT). The tables stay at the top level, so a project file still opens as a plain Model JSON in
 // older versions, and an old Model JSON opens here as a project without settings.
-// Saving: Chrome / Edge write to the chosen file (File System Access API; Ctrl+S overwrites it), other browsers download.
+// Saving: Save project downloads <Project>_project.json; opening uses the browser's plain file dialog.
 // A copy of every open project is kept in this browser (IndexedDB) for "Recent projects" and to restore unsaved work.
 
 export const FORMAT = "gnx-sketch-project", FORMAT_VERSION = 1;

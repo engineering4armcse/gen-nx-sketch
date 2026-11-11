@@ -2,6 +2,14 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.31 (2026-11-11)
+
+Requested by Arnold · edited by Claude
+
+- One Save project button (Ctrl+S) that always downloads `<Project>_project.json`. Save as… removed.
+- Open JSON file uses the browser's plain file dialog.
+- Element list CSV removed.
+
 ## 3.30 (2026-11-11)
 
 Requested by Arnold · edited by Claude
