@@ -1,7 +1,7 @@
 // Shop drawing quantities: bar bending schedule (BBS) per beam and column type, from the Gen NX rebar data and the model geometry.
 // Lengths are estimates for the shop drawing: spans between supports on the centreline, anchorage into the support with a
 // 90° hook (12d), laps where a bar is longer than the stock length, hoops and ties with 135° hooks (6d, at least 75 mm).
-import { barDia, colBars, beamBox } from "./rebar.js";
+import { barDia, colBars, beamBox, spacingOk } from "./rebar.js";
 
 export const BBS_DEFAULTS = { lap: 40, hook: 12, stock: 12, waste: 5 };
 const kgm = d => (d * 1000) ** 2 / 162; // kg per metre of a bar d (m) across
@@ -79,7 +79,7 @@ export function computeBBS(model, rebar, p = {}) {
       }
       // stirrups: I / J zones Ln/4 each at their spacing, midspan Ln/2
       const zones = [[list[0], Ln / 4], [list[1], Ln / 2], [list[2], Ln / 4]], hoops = new Map(), ties = new Map();
-      for (const [x, z] of zones) if (x.stir) {
+      for (const [x, z] of zones) if (x.stir && spacingOk(x.stir.s)) {
         const n = Math.ceil(z / x.stir.s), k = x.stir.bar;
         hoops.set(k, (hoops.get(k) || 0) + n);
         if (x.stir.leg > 2) ties.set(k, (ties.get(k) || 0) + n * (x.stir.leg - 2));
@@ -106,7 +106,7 @@ export function computeBBS(model, rebar, p = {}) {
       const k = Math.round(H * 100) + "|" + cont;
       if (!groups.has(k)) groups.set(k, { H, cont, n: 0 }); groups.get(k).n++;
     }
-    const rows = [], tie = det.tie, tm = det.tieCen || tie, dt = tie ? barDia(tie.bar) : 0.01;
+    const rows = [], tie = det.tie && spacingOk(det.tie.s) ? det.tie : null, tm = det.tieCen && spacingOk(det.tieCen.s) ? det.tieCen : tie, dt = tie ? barDia(tie.bar) : 0.01;
     let gi = 0;
     for (const g of [...groups.values()].sort((x, y) => y.H - x.H || x.cont - y.cont)) {
       gi++;

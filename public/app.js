@@ -2,7 +2,7 @@ import * as C from "./core.js";
 import { demoModel } from "./demo.js";
 import { toSvg, toPdf } from "./render.js";
 import { build3dHtml, model3dData } from "./viewer3d.js";
-import { parseRebar, buildRebarViews, rebarCards, editValues, pushRecords, colRebarTexts } from "./rebar.js";
+import { parseRebar, buildRebarViews, rebarCards, editValues, pushRecords, colRebarTexts, spacingOk } from "./rebar.js";
 import { buildShopViews, shopBBS, bbsCsv } from "./shop.js";
 import { buildBundleHtml } from "./bundle.js";
 import { makeZip } from "./zip.js";
@@ -225,8 +225,10 @@ function rebuild() {
   C.setGridAlpha(+$("#gridAlpha").value / 100); $("#gridAlphaV").textContent = `${$("#gridAlpha").value}%`;
   const opts = { colorMode: $("#colorMode").value, labels: $("#labels").checked, fontScale: fontScale(), beamTop: $("#beamTop").checked, markNoRebar: $("#markNoRebar").checked, slabT: slabT(), info: C.sectionInfo(m), grids, levels: state.levels, colors: state.colors, planeTol: tol, levelTol: 0.05 };
   state.rebar = parseRebar(state.raw, m);
+  const noSpacing = [...new Set([...state.rebar.beams.filter(d => d.sectors?.some(q => q.stir && !spacingOk(q.stir.s))), ...state.rebar.cols.filter(d => [d.tie, d.tieCen].some(t => t && !spacingOk(t.s)))].map(d => d.name))];
   state.rebarNote = [state.rebar.orphans.length ? `Rebar edits with no section in the model: ${state.rebar.orphans.map(o => o.name).join(", ")} (kept in the file).` : "",
-    state.rebar.changed.length ? `Gen NX changed the rebar of ${state.rebar.changed.map(d => d.name).join(", ")}; the edits made here are kept, check them.` : ""].filter(Boolean).join(" ");
+    state.rebar.changed.length ? `Gen NX changed the rebar of ${state.rebar.changed.map(d => d.name).join(", ")}; the edits made here are kept, check them.` : "",
+    noSpacing.length ? `No stirrup / tie spacing in Gen NX for ${noSpacing.join(", ")}: those stirrups or ties are left out of the shop drawings and the BBS.` : ""].filter(Boolean).join(" ");
   // members of a section with several rebar types are labelled by type (B2A3, B2A3-A ...) in plans and elevations
   m.typeOf = new Map();
   for (const d of [...state.rebar.beams, ...state.rebar.cols]) if (d.sub) for (const id of d.elems) m.typeOf.set(id, d.name);

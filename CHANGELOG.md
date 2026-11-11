@@ -2,6 +2,13 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.32 (2026-11-11)
+
+Requested by Arnold · edited by Claude
+
+- Fixed "Out of Memory" when loading a model with stirrups or ties without spacing (DIST 0 or 1e-6); they are left out of the shop drawings and BBS and named in the rebar note.
+- Bars with a lap longer than the stock length no longer loop when split.
+
 ## 3.31 (2026-11-11)
 
 Requested by Arnold · edited by Claude
