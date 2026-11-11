@@ -22,12 +22,12 @@ const FIELDS = ["base", "conn", "colorMode", "labels", "tol", "gridMode", "gridX
 function loadSettings() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch {}
-  for (const f of FIELDS) if (s[f] !== undefined) { const el = $("#" + f); el.type === "checkbox" ? (el.checked = s[f]) : (el.value = s[f]); }
+  for (const f of FIELDS) if (s[f] !== undefined) { const el = $("#" + f); if (el) el.type === "checkbox" ? (el.checked = s[f]) : (el.value = s[f]); } // el missing: an older index.html
   if (s.remember && s.key) $("#key").value = s.key;
 }
 function saveSettings() {
   const s = {};
-  for (const f of FIELDS) { const el = $("#" + f); s[f] = el.type === "checkbox" ? el.checked : el.value; }
+  for (const f of FIELDS) { const el = $("#" + f); if (el) s[f] = el.type === "checkbox" ? el.checked : el.value; }
   if (s.remember) s.key = $("#key").value;
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
 }
@@ -861,8 +861,12 @@ function show2d(tab) {
 // 3D click on an element with rebar -> its sheet in the Rebar detail tab
 addEventListener("message", e => { const id = e.source === $("#frame3d").contentWindow && e.data?.gnxRebar; if (id) openRebarFor([id]); });
 
+// a page element the script expects is missing when index.html is older than app.js (a partial update): say so
+const missingEls = ["beamSrc", "colSrc", "designDlg", "designBtn", "groupBar", "fileJson"].filter(id => !document.getElementById(id));
+if (missingEls.length) (window.__bootErrors ||= []).push(`index.html is older than app.js (no #${missingEls.join(", #")})`);
 init();
 window.__appReady = true;
+if (/did not start/.test($("#status").textContent)) status(""); // started late on a slow connection
 
 // ---------- Shop drawing: bar bending schedule per beam and column type ----------
 const SHAPE_SVG = { // small bar sketches, 44 x 18, by shop.js shape kind
