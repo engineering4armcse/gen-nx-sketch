@@ -20,6 +20,9 @@ const SECTORS = [["I", "SUPPORT (I-END)"], ["M", "MIDSPAN"], ["J", "SUPPORT (J-E
 const barNum = b => +(b?.NUM ?? b?.BAR_NUM ?? b?.NUMBER ?? b?.dNUM ?? 0);
 const barName = b => String(b?.NAME ?? b?.BAR_NAME ?? b?.BAR_NAME1 ?? b?.DIA ?? "");
 const asList = v => (Array.isArray(v) ? v : v && typeof v === "object" ? (barNum(v) ? [v] : Object.values(v)) : []);
+// a stirrup / tie spacing that can be drawn and counted: Gen NX leaves 0 or 1e-6 when none is set, and a loop over
+// stirrups at 0 spacing never ends (the browser ran out of memory)
+export const spacingOk = s => s >= 0.025;
 const pickKey = (o, re) => { const k = Object.keys(o).find(k => re.test(k) && !/DC|DIST/.test(k)); return k ? o[k] : undefined; };
 
 // -> { beams: [detail], cols: [detail] }

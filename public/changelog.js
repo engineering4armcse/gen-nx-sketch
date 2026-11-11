@@ -1,7 +1,11 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.31";
+export const VERSION = "3.32";
 export const CHANGELOG = [
+  { version: "3.32", date: "2026-11-11", by: "Arnold", editor: "Claude", changes: [
+    "Fixed the browser crash \"Aw, Snap! Out of Memory\" when loading a model whose beam stirrups or column ties have no spacing in Gen NX (DIST 0 or 1e-6): the shop drawing drew stirrups at 0 spacing without end. Such stirrups / ties are now left out of the shop drawings and the BBS, and the rebar note names the sections to fix in Gen NX.",
+    "Beam and column bars whose lap is longer than the stock length no longer loop when split into pieces.",
+  ] },
   { version: "3.31", date: "2026-11-11", by: "Arnold", editor: "Claude", changes: [
     "One Save project button (Ctrl+S): it always downloads <Project>_project.json (the browser's downloads, Ctrl+J). Save as… is gone; the write-to-the-same-file dialog of Chrome/Edge saved nothing in some browsers.",
     "Open JSON file uses the browser's plain file dialog, which works in every browser. Dropping the file on the start page still works.",

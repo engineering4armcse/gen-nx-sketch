@@ -9,7 +9,7 @@
 //              (outside 2hc of the beam faces), ties at <= 100 along a splice; bars into the pile cap 40db with a 15db foot
 // Lengths come from the model centrelines and the Gen NX rebar data; every sheet says so and asks to check before cutting.
 import { adders, colAxes, sectionOutline, tagOf, fmtEl, itemExtents } from "./core.js";
-import { barDia, colBars, beamBox, drawColSection } from "./rebar.js";
+import { barDia, colBars, beamBox, drawColSection, spacingOk } from "./rebar.js";
 
 // ---------- 1.5 TABEL PANJANG PENJANGKARAN MINIMUM (TS-420B): fc -> db -> [ld, lde, ldh, ls] in mm ----------
 const ANCH = {
@@ -75,6 +75,7 @@ function splitBar(s0, s1, ls, stock, zones) {
   while (s1 - a > stock + 1e-6) {
     const ok = zones.filter(c => c - ls / 2 > a + 0.3 && c + ls / 2 - a <= stock);
     const c = ok.length ? ok[ok.length - 1] : a + stock - ls / 2; // no allowed place: at the stock length (marked)
+    if (c - ls / 2 < a + 0.1) break; // lap longer than the stock: no piece would move on
     out.push([a, c + ls / 2, !ok.length]); a = c - ls / 2;
   }
   out.push([a, s1, false]);
@@ -186,7 +187,7 @@ function spanStirrups(x) {
   const S = Object.fromEntries((x.det?.sectors || []).map(q => [q.key, q])), I = S.I || x.det?.sectors?.[0], M = S.M || I, J = S.J || I;
   if (!I?.stir) return { zones: [], web: null };
   const A = Math.min(Math.max(0.25 * x.Ln, 2 * x.H), x.Ln / 2), zs = [];
-  const zone = (a, b, q, end) => { if (b - a < 0.01 || !q?.stir) return; const n = end ? Math.floor((b - a - 0.05) / q.stir.s) + 1 : Math.max(0, Math.ceil((b - a) / q.stir.s) - 1); zs.push({ a, b, bar: q.stir.bar, s: q.stir.s, n, leg: q.stir.leg || 2 }); };
+  const zone = (a, b, q, end) => { if (b - a < 0.01 || !q?.stir || !spacingOk(q.stir.s)) return; const n = end ? Math.floor((b - a - 0.05) / q.stir.s) + 1 : Math.max(0, Math.ceil((b - a) / q.stir.s) - 1); zs.push({ a, b, bar: q.stir.bar, s: q.stir.s, n, leg: q.stir.leg || 2 }); };
   zone(x.a0, x.a0 + A, I, true); zone(x.a0 + A, x.a1 - A, M, false); zone(x.a1 - A, x.a1, J, true);
   const skin = [I, M, J].find(q => q?.skin)?.skin;
   const web = skin ? { bar: skin.bar, n: 2 * skin.n } : x.H > 0.9 ? null : x.H > 0.7 ? { bar: "D13", n: 4, std: true } : x.H > 0.5 ? { bar: "D13", n: 2, std: true } : null;
@@ -246,8 +247,8 @@ function columnBars(stack, model, opts) {
   return out;
 }
 function storyTies(r, laps) {
-  const det = r.det, t = det?.tie; if (!t) return null;
-  const tm = det.tieCen || t, hc = Math.max(r.sec?.h || 0.4, r.sec?.b || 0.4), Ho = r.z1 - r.z0 - (r.hbTop || 0);
+  const det = r.det, t = det?.tie; if (!t || !spacingOk(t.s)) return null;
+  const tm = det.tieCen && spacingOk(det.tieCen.s) ? det.tieCen : t, hc = Math.max(r.sec?.h || 0.4, r.sec?.b || 0.4), Ho = r.z1 - r.z0 - (r.hbTop || 0);
   const B = Math.max(hc, 0.5, Ho / 6), joint = r.hbTop || 0, zs = [];
   const z = (a, b, s, lab) => { if (b - a > 0.01) zs.push({ a, b, s, n: Math.max(1, Math.ceil((b - a) / s)), bar: t.bar, lab }); };
   z(r.z0, r.z0 + B, t.s, "end"); z(r.z0 + B, r.z1 - joint - B, tm.s, "mid"); z(r.z1 - joint - B, r.z1 - joint, t.s, "end"); z(r.z1 - joint, r.z1, t.s, "joint");

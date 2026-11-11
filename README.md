@@ -1,6 +1,6 @@
 # Gen NX Sketch
 
-Version 3.31. What changed in each version, and who asked for it, is in [CHANGELOG.md](CHANGELOG.md) and on the start page under *What changed in each version*.
+Version 3.32. What changed in each version, and who asked for it, is in [CHANGELOG.md](CHANGELOG.md) and on the start page under *What changed in each version*.
 
 Web app that reads a MIDAS Gen NX model through the MIDAS API and draws sketch plans and elevations for drafters.
 
