@@ -24,11 +24,13 @@ function loadSettings() {
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch {}
   for (const f of FIELDS) if (s[f] !== undefined) { const el = $("#" + f); if (el) el.type === "checkbox" ? (el.checked = s[f]) : (el.value = s[f]); } // el missing: an older index.html
   if (s.remember && s.key) $("#key").value = s.key;
+  setStartMode(s.startMode === "file" ? "file" : "api");
 }
 function saveSettings() {
   const s = {};
   for (const f of FIELDS) { const el = $("#" + f); if (el) s[f] = el.type === "checkbox" ? el.checked : el.value; }
   if (s.remember) s.key = $("#key").value;
+  s.startMode = startMode();
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
 }
 // the settings that belong to a project (saved in its file as GNX_SETTINGS); key, base URL and route belong to the computer
@@ -98,6 +100,21 @@ async function fetchTables() {
   if (!Object.keys(C.tableOf(raw.NODE, "NODE")).length) throw new Error("The model has no nodes. Is the right model open in Gen NX?");
   return raw;
 }
+// start page: two ways in, from Gen NX through the API or from a JSON file; only the fields of the chosen one show
+const startMode = () => document.querySelector('input[name="startFrom"]:checked')?.value || "api";
+function setStartMode(m) {
+  const r = document.querySelector(`input[name="startFrom"][value="${m}"]`); if (r) r.checked = true;
+  const file = m === "file";
+  for (const [id, hide] of [["fromApi", file], ["connect", file], ["connAdv", file], ["fromFile", !file], ["openJson", !file]]) { const el = $("#" + id); if (el) el.hidden = hide; }
+  if (!file) { const f = $("#pickFallback"); if (f) f.hidden = true; }
+}
+// the rebar source picked on the start page, for a model just opened: ask for the pasted tables when Concrete Design is
+// picked and the project does not already use it
+function askDesignSource() {
+  const cd = state.raw?.CDESIGN || {}, b = $("#beamSrc").value, c = $("#colSrc").value;
+  if ((b === "design" && cd.beamUse !== "design") || (c === "design" && cd.colUse !== "design"))
+    openDesign({ beamUse: b === "design" ? "design" : cd.beamUse || "tables", colUse: c === "design" ? "design" : cd.colUse || "tables" });
+}
 // start page: a new project from the model open in Gen NX
 async function loadFromMidas() {
   saveSettings();
@@ -108,7 +125,7 @@ async function loadFromMidas() {
     await new Promise(r => setTimeout(r, 350)); // let the full bar show before the workspace opens
     openProject({ raw, project: null, settings: null }, "MIDAS Gen NX", { midasReadAt: new Date().toISOString() });
     progress(null);
-    if ($("#beamSrc").value === "design" || $("#colSrc").value === "design") openDesign({ beamUse: $("#beamSrc").value, colUse: $("#colSrc").value }); // chosen on the start page
+    askDesignSource(); // Concrete Design chosen on the start page
   } catch (e) {
     progress(null); status(e.message, "err");
   } finally { btn.disabled = false; busy(false); }
@@ -653,18 +670,44 @@ async function saveProject(asNew, copy = false, suggested) {
     status(`Not saved: ${e.message}. Try Save as to another folder; your work is still here and in this browser.`, "err"); return false;
   } finally { busy(false); }
 }
+// Chrome/Edge open through the file system picker (Ctrl+S then saves back to the same file). Where that picker cannot
+// show (blocked by the browser or a policy, it fails at once, often as a silent "aborted"), the plain file dialog is
+// used from then on, and the person gets a link for it now: the click that was spent cannot open a second dialog.
+let noPicker = false;
 async function openFile() {
-  if (!P.canPickFiles()) { $("#fileJson").click(); return; }
-  try { const h = await P.pickOpenFile(); if (h) await openFromFile(await h.getFile(), h); }
-  catch (e) { status(`Could not open the file: ${e.message}.`, "err"); }
+  status("");
+  if (noPicker || !P.canPickFiles()) { $("#fileJson").click(); return; }
+  const t0 = performance.now();
+  try {
+    const h = await P.pickOpenFile();
+    if (h) { await openFromFile(await h.getFile(), h); return; }
+    if (performance.now() - t0 > 400) return; // closed by the person
+    throw new Error("the browser closed it at once");
+  } catch (e) {
+    noPicker = true;
+    status(`The file dialog did not open (${e.message}). Use the link below, or drop the JSON file on this page.`, "err");
+    $("#pickFallback").hidden = false;
+  }
 }
 async function openFromFile(f, handle = null) {
+  if (!/\.json$/i.test(f.name) && f.type !== "application/json") { status(`${f.name} is not a JSON file. Open a project or Model JSON (.json).`, "err"); return; }
+  busy(true); status(`Opening ${f.name}…`);
   try {
-    const p = P.readProject(JSON.parse(await f.text()));
+    let json;
+    try { json = JSON.parse(await f.text()); } catch (e) { throw new Error(`not valid JSON (${e.message})`); }
+    if (!json || typeof json !== "object") throw new Error("not a model");
+    const p = P.readProject(json);
+    if (!Object.keys(C.tableOf(p.raw.NODE, "NODE")).length) throw new Error("no NODE table: it is not a Gen NX model");
+    takeProject(f.name.replace(/(_model|_project)?\.json$/i, "").replace(/_/g, " "));
     openProject(p, p.project ? "Project file" : f.name, { handle, fileName: f.name, fileTime: f.lastModified });
+    $("#pickFallback").hidden = true;
     if (!p.project) status(`Opened ${f.name} (Model JSON without project settings). Save makes it a project file.`, "ok");
     else status(`Opened ${f.name}${p.project.savedAt ? `, saved ${when(p.project.savedAt)}` : ""}.`, "ok");
-  } catch (err) { status(`Could not read ${f.name}: ${err.message}. Open a project file or Model JSON saved from this app, or a Gen NX database (DBG) export.`, "err"); }
+    askDesignSource();
+  } catch (err) {
+    document.body.classList.add("on-start"); // back where the message shows
+    status(`Could not open ${f.name}: ${err.message}. Open a project file or Model JSON saved from this app, or a Gen NX database (DBG) export.`, "err");
+  } finally { busy(false); }
 }
 // Recent projects: from the file on disk when the browser still may read it, else from the copy kept in this browser
 async function openRecent(id, restore) {
@@ -758,7 +801,20 @@ function offGridColumns() {
 function init() {
   loadSettings();
   setupStart();
-  $("#startForm").onsubmit = e => { e.preventDefault(); takeProject(); loadFromMidas(); };
+  $("#startForm").onsubmit = e => { e.preventDefault(); takeProject(); startMode() === "file" ? openFile() : loadFromMidas(); };
+  for (const r of document.querySelectorAll('input[name="startFrom"]')) r.onchange = () => { setStartMode(startMode()); status(""); saveSettings(); };
+  $("#pickFallback").onclick = () => $("#fileJson").click();
+  // drop a JSON file anywhere on the start page
+  $("#start").addEventListener("dragover", e => { if ([...e.dataTransfer.types].includes("Files")) { e.preventDefault(); document.body.classList.add("dropping"); } });
+  $("#start").addEventListener("dragleave", e => { if (e.target === e.currentTarget) document.body.classList.remove("dropping"); });
+  $("#start").addEventListener("drop", async e => {
+    e.preventDefault(); document.body.classList.remove("dropping");
+    const it = [...e.dataTransfer.items].find(i => i.kind === "file"); if (!it) return;
+    const hp = it.getAsFileSystemHandle?.(), f = it.getAsFile(); // the handle lets Ctrl+S save back to that file (Chrome/Edge)
+    setStartMode("file"); takeProject();
+    let h = null; try { h = (await hp) || null; if (h?.kind !== "file") h = null; } catch {}
+    await openFromFile(f, h);
+  });
   $("#demo").onclick = () => { takeProject("Demo building"); openProject({ raw: demoModel(), project: null, settings: null }, "Demo model"); };
   $("#openJson").onclick = () => { takeProject(); openFile(); };
   $("#fileJson").onchange = async e => { const f = e.target.files[0]; if (f) await openFromFile(f); e.target.value = ""; };

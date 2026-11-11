@@ -1,7 +1,12 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.29";
+export const VERSION = "3.30";
 export const CHANGELOG = [
+  { version: "3.30", date: "2026-11-11", by: "Arnold", editor: "Claude", changes: [
+    "Start page: choose From Gen NX (API) or From a JSON file. Each shows only what it needs: the MAPI-Key, Load model from Gen NX and the connection settings for the API; Open JSON file… for a project, Model JSON (…_model.json) or Gen NX database export, with no key and no Gen NX. The choice is remembered.",
+    "Opening a JSON file no longer fails silently: when the browser's file dialog cannot open (it closes at once), the page says so and offers the other file dialog; a JSON file can also be dropped on the start page. A file that is not valid JSON or has no NODE table says why. Without a project name, the name comes from the file name.",
+    "Beam / Column rebar from Concrete Design (paste) now also applies when a JSON file is opened: the paste dialog opens right after, as after reading from Gen NX.",
+  ] },
   { version: "3.29", date: "2026-11-11", by: "Arnold", editor: "Claude", changes: [
     "\"The app did not start\" now says why: which app file is missing (e.g. design.js, added in 3.26, when a folder was only partly updated), whether index.html is older than app.js, and the script error itself. It is checked when the page has finished loading instead of after 3 seconds, so a slow connection no longer shows the message while the app is still loading, and it is cleared if the app starts late.",
   ] },

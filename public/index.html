@@ -20,25 +20,36 @@
     <h1 id="startTitle" translate="no">Gen NX Sketch</h1>
     <form id="startForm" novalidate>
       <label>Project name<input id="startProject" autocomplete="off" placeholder="For example Gedung Kantor 5 Lantai" maxlength="80"></label>
-      <label>MAPI-Key
-        <span class="row"><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Gen NX › Apps › API Settings"><button id="showKey" type="button" aria-label="Show key" aria-pressed="false">Show</button></span>
-      </label>
-      <label class="check"><input type="checkbox" id="remember"> Remember the key on this computer</label>
+      <div class="seg" role="radiogroup" aria-label="Start from">
+        <label><input type="radio" name="startFrom" value="api" checked><span>From Gen NX (API)</span></label>
+        <label><input type="radio" name="startFrom" value="file"><span>From a JSON file</span></label>
+      </div>
+      <div id="fromApi">
+        <label>MAPI-Key
+          <span class="row"><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Gen NX › Apps › API Settings"><button id="showKey" type="button" aria-label="Show key" aria-pressed="false">Show</button></span>
+        </label>
+        <label class="check"><input type="checkbox" id="remember"> Remember the key on this computer</label>
+        <p class="start-hint">Gen NX must be open with the model. The tables are read through the API.</p>
+      </div>
+      <div id="fromFile" hidden>
+        <p class="start-hint">Open a project saved from this app, a Model JSON (…_model.json) or a Gen NX database export. No MAPI-Key and no Gen NX needed. You can also drop the file on this page.</p>
+      </div>
       <div class="srcs"><label>Beam rebar from
         <select id="beamSrc"><option value="tables">Rebar tables</option><option value="design">Concrete Design (paste)</option></select>
       </label><label>Column rebar from
         <select id="colSrc"><option value="tables">Rebar tables</option><option value="design">Concrete Design (paste)</option></select>
       </label></div>
       <button id="connect" type="submit" class="primary">Load model from Gen NX</button>
-      <button id="openJson" type="button" class="primary open-proj">Open project…</button>
+      <button id="openJson" type="button" class="primary" hidden>Open JSON file…</button>
       <div id="loadProg" class="prog" role="progressbar" aria-label="Reading the model" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
         <div class="prog-track"><div id="progFill" class="prog-fill"></div></div>
         <p class="prog-text"><span id="progLabel"></span><span id="progCount"></span></p>
       </div>
       <p id="status" class="status" role="status"></p>
+      <button id="pickFallback" type="button" class="link" hidden>Choose the file with the browser's other file dialog</button>
       <div id="restoreBar" class="restore" hidden><p id="restoreText"></p><div class="row"><button type="button" id="restoreYes" class="primary">Restore</button><button type="button" id="restoreNo">Discard</button></div></div>
       <section id="recent" class="recent" aria-labelledby="recentHead" hidden><h2 id="recentHead">Recent projects</h2><ul id="recentList"></ul></section>
-      <details class="adv">
+      <details class="adv" id="connAdv">
         <summary>Connection settings</summary>
         <label>Base URL<input autocomplete="off" id="base" value="https://moa-engineers.midasit.com:443/gen" spellcheck="false"></label>
         <label>Route
@@ -113,7 +124,7 @@
     </div>
     <div id="pane2d" class="pane">
       <div id="sheet" tabindex="-1"></div>
-      <div class="viewbar canvasbar"><span id="viewTitle" translate="no"></span><span id="viewStatus" class="vstatus" role="status" aria-live="polite"></span><span class="hint">Scroll to zoom · drag to pan · double-click a member for its rebar</span><button id="fit" type="button">Fit</button></div>
+      <div class="viewbar canvasbar"><span id="viewTitle" translate="no"></span><span id="viewStatus" class="vstatus" role="status" aria-live="polite"></span><span class="start-hint">Scroll to zoom · drag to pan · double-click a member for its rebar</span><button id="fit" type="button">Fit</button></div>
     </div>
     <div id="pane3d" class="pane" hidden>
       <iframe id="frame3d" title="3D structure"></iframe>
