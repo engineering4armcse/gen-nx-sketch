@@ -353,3 +353,14 @@ input[type=range]{accent-color:var(--accent);width:100%}
 #designDlg select{width:100%}
 .srcs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:600px){.srcs{grid-template-columns:1fr}}
+/* start page: From Gen NX (API) or From a JSON file */
+#start .seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:18px 0 18px;border-radius:10px;background:var(--frame-2);border:1px solid var(--frame-line)}
+#start .seg label{position:relative;margin:0;color:var(--frame-text-2);font-size:14px;cursor:pointer}
+#start .seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+#start .seg span{display:block;text-align:center;padding:10px 6px;border-radius:7px}
+#start .seg input:checked+span{background:var(--frame-3);color:var(--frame-text);font-weight:600}
+#start .seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:1px}
+#start .start-hint{margin:-8px 0 18px;white-space:normal;font-size:13px;line-height:1.45;color:var(--frame-text-2)}
+#fromFile .start-hint{margin-top:0}
+#start #pickFallback{margin-top:12px;align-self:flex-start}
+body.dropping #start .start-form{outline:2px dashed var(--accent);outline-offset:16px;border-radius:12px}

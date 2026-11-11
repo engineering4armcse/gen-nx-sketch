@@ -2,6 +2,14 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.30 (2026-11-11)
+
+Requested by Arnold · edited by Claude
+
+- Start page: choose From Gen NX (API) or From a JSON file; each shows only its own fields and button. The choice is remembered.
+- Opening a JSON file no longer fails silently: if the file dialog cannot open, the page says so and offers the other dialog. A JSON file can be dropped on the start page. Wrong files say why.
+- Concrete Design (paste) chosen on the start page also applies when a JSON file is opened.
+
 ## 3.29 (2026-11-11)
 
 Requested by Arnold · edited by Claude
