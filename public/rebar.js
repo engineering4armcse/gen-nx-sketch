@@ -319,41 +319,81 @@ function hatchRect(A, x0, y0, x1, y1, sp, st) {
     if (b[0] > a[0]) A.line(a, b, st);
   }
 }
-// ground beam (base level, FG / FB / TB): brick on both sides of the web under the slab, lean concrete (50) and a sand bed (100) under it
-function groundBed(A, s, cx, cy, tf) {
-  const st = { layer: "1", color: INK, lw: 0.18 }, hst = { layer: "A-HATCH", color: INK, lw: 0.09 }, o = flangeO(s);
-  const L = cx - s.B / 2, R = cx + s.B / 2, bot = cy - s.H / 2, fb = cy + s.H / 2 - tf, x0 = L - o, x1 = R + o;
-  for (const [a, b] of [[x0, L], [R, x1]]) { // brick
-    A.poly([[a, bot], [b, bot], [b, fb], [a, fb]], { ...hst, lw: 0.13, closed: true });
-    hatchRect(A, a, bot, b, fb, 0.04, hst);
+// small deterministic pseudo-random numbers, so the hatches look the same on every redraw and in PDF / DXF
+const rnd = seed => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+// concrete hatch (AR-CONC style) inside x0..x1, y0..y1: scattered dots and small open triangles
+function concHatch(A, x0, y0, x1, y1, st) {
+  const r = rnd(7), g = 0.012, e = 0.004;
+  for (let y = y0 + g / 2; y < y1; y += g) for (let x = x0 + g / 2; x < x1; x += g) {
+    const px = Math.min(x1 - e, Math.max(x0 + e, x + (r() - 0.5) * g)), py = Math.min(y1 - e, Math.max(y0 + e, y + (r() - 0.5) * g)), t = r();
+    if (t < 0.35) A.line([px - 0.0006, py], [px + 0.0006, py], st); // dot
+    else if (t < 0.6) { const a = r() * Math.PI * 2, q = i => [px + 0.0035 * Math.cos(a + (2 * Math.PI * i) / 3), py + 0.0035 * Math.sin(a + (2 * Math.PI * i) / 3)]; A.poly([q(0), q(1), q(2)], { ...st, closed: true }); }
   }
-  A.poly([[x0, bot], [x1, bot], [x1, bot - 0.05], [x0, bot - 0.05]], { ...st, closed: true }); // lean concrete
-  A.poly([[x0, bot - 0.05], [x1, bot - 0.05], [x1, bot - 0.15], [x0, bot - 0.15]], { ...st, closed: true }); // sand
-  for (let x = x0 + 0.02; x < x1 - 0.02; x += 0.035) for (const y of [bot - 0.08, bot - 0.12]) A.circle([x + (y < bot - 0.1 ? 0.017 : 0), y], 0.004, { ...hst, fill: INK, solid: true }); // sand dots
+}
+// sand hatch (AR-SAND style) inside x0..x1, y0..y1: fine dots, dense and scattered
+function sandHatch(A, x0, y0, x1, y1, st) {
+  const r = rnd(11), g = 0.007, e = 0.002;
+  for (let y = y0 + g / 2; y < y1; y += g) for (let x = x0 + g / 2; x < x1; x += g) {
+    if (r() < 0.45) continue;
+    const px = Math.min(x1 - e, Math.max(x0 + e, x + (r() - 0.5) * g)), py = Math.min(y1 - e, Math.max(y0 + e, y + (r() - 0.5) * g));
+    A.line([px - 0.0005, py], [px + 0.0005, py], st);
+  }
+}
+// compacted soil hatch inside x0..x1, y0..y1: short strokes in a herringbone, / and \\ alternating along each row, rows staggered
+function soilHatch(A, x0, y0, x1, y1, st, g = 0.032) {
+  const h = 0.3 * g;
+  for (let j = 0, y = y1 - g / 2; y - h >= y0 - 1e-9; j++, y -= g / 2)
+    for (let i = 0, x = x0 + g / 2 + (j % 2 ? g / 2 : 0); x + h <= x1 + 1e-9; i++, x += g) {
+      if (x - h < x0 - 1e-9) continue;
+      const d = (i + j) % 2 ? 1 : -1;
+      A.line([x - h, y - d * h], [x + h, y + d * h], st);
+    }
+}
+// ground beam (base level, FG / FB / TB), as the office's typical detail: brick walls each side of the web under the slab
+// (green outline, 45° hatch); under the beam, top to bottom: lean concrete (lantai kerja 50, concrete hatch), backfill sand
+// (pasir urug 100, sand dots) and compacted soil (tanah dipadatkan 150, herringbone), each in a red outline
+function groundBed(A, s, cx, cy, tf) {
+  const ost = { layer: "1", color: INK, lw: 0.25 }, wst = { layer: "3", color: INK, lw: 0.25 }, hst = { layer: "A-HATCH", color: INK, lw: 0.09 }, o = flangeO(s);
+  const L = cx - s.B / 2, R = cx + s.B / 2, bot = cy - s.H / 2, fb = cy + s.H / 2 - tf, x0 = L - o, x1 = R + o, w = 0.8 * o;
+  for (const [a, b] of [[L - w, L], [R, R + w]]) { // brick
+    A.poly([[a, bot], [a, fb], [b, fb], [b, bot]], wst);
+    hatchRect(A, a, bot, b, fb, 0.025, hst);
+  }
+  const box = (ya, yb) => A.poly([[x0, ya], [x1, ya], [x1, yb], [x0, yb]], { ...ost, closed: true });
+  const lc = bot - 0.05, ps = lc - 0.1, tp = ps - 0.15;
+  box(bot, lc); concHatch(A, x0, lc, x1, bot, hst); // lantai kerja
+  box(lc, ps); sandHatch(A, x0, ps, x1, lc, hst); // pasir urug
+  box(ps, tp); soilHatch(A, x0, tp, x1, ps, hst); // tanah dipadatkan
 }
 const bar = (A, x, y, d, layer = "REBAR") => A.circle([x, y], Math.max(d / 2, 0.004), { layer, color: INK, fill: INK, lw: 0.13, solid: true });
 const spread = (n, a, b) => (n <= 1 ? [(a + b) / 2] : Array.from({ length: n }, (_, i) => a + ((b - a) * i) / (n - 1)));
 // m items spread over arr (inner legs on bar positions)
 const pick = (arr, m) => (m > 0 && arr.length ? spread(m + 2, -1, arr.length).slice(1, -1).map(j => arr[Math.min(arr.length - 1, Math.max(0, Math.round(j)))]) : []);
-// 135° hook: a hairpin from p going along unit u, about 6 bar diameters long (flip: bends to the other side)
-function hook(A, p, u, ds, st, flip = false) {
-  // the bend sits at the corner p (as in the standard), the two legs run inward along u, about 6 bar diameters
-  const L = Math.max(6 * ds, 0.05), n = flip ? [u[1], -u[0]] : [-u[1], u[0]], w = Math.max(ds, 0.008), r = w / 2;
-  const b = [p[0] + u[0] * r, p[1] + u[1] * r], c = [b[0] + n[0] * r, b[1] + n[1] * r], at = (q, t) => [q[0] + u[0] * t, q[1] + u[1] * t];
-  const arc = Array.from({ length: 7 }, (_, i) => { const t = (Math.PI * i) / 6; return [c[0] - n[0] * r * Math.cos(t) - u[0] * r * Math.sin(t), c[1] - n[1] * r * Math.cos(t) - u[1] * r * Math.sin(t)]; });
-  A.poly([at(b, L), ...arc, at([b[0] + n[0] * w, b[1] + n[1] * w], L)], st);
+// 135° hook round a main bar: the stirrup wraps the bar (centre c, R = bar radius + half the stirrup) from angle a0 by a
+// further 135° (dir 1 = anticlockwise, -1 = clockwise), then runs straight max(6 db, 75 mm) along the tangent (SNI 2847 25.3.2)
+function wrap(A, c, R, a0, dir, ds, st) {
+  const L = Math.max(6 * ds, 0.075), n = 9, pts = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + dir * (3 * Math.PI / 4) * (i / n); pts.push([c[0] + R * Math.cos(a), c[1] + R * Math.sin(a)]); }
+  const a1 = a0 + dir * (3 * Math.PI / 4), t = [-dir * Math.sin(a1), dir * Math.cos(a1)], e = pts[pts.length - 1];
+  pts.push([e[0] + t[0] * L, e[1] + t[1] * L]);
+  A.poly(pts, st);
 }
-// stirrup / tie: closed loop with rounded corners and a 135° hook at the top-right corner, plus extra inner legs hooked at the top
-// (and cross ties hooked on the right), as on the office's typical beam section
-function hoop(A, x0, y0, x1, y1, ds, legsV = 0, legsH = 0, bx = null) {
-  const st = { layer: "4", color: RED, lw: 0.25 }, r = Math.min(Math.max(1.5 * ds, 0.008), (x1 - x0) / 4, (y1 - y0) / 4);
-  const corner = (cx, cy, a0) => Array.from({ length: 4 }, (_, i) => { const a = a0 + (Math.PI / 2) * (i / 3); return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
-  A.poly([...corner(x1 - r, y0 + r, -Math.PI / 2), ...corner(x1 - r, y1 - r, 0), ...corner(x0 + r, y1 - r, Math.PI / 2), ...corner(x0 + r, y0 + r, Math.PI)], { ...st, closed: true });
-  const c = [x1 - r * 0.3, y1 - r * 0.3], u = [-Math.SQRT1_2, -Math.SQRT1_2];
-  hook(A, c, u, ds, st, true);
-  const xs = bx || spread(legsV + 2, x0, x1).slice(1, -1);
-  for (const x of xs.slice(0, legsV)) { A.line([x, y0], [x, y1], st); hook(A, [x, y1], [-Math.SQRT1_2, -Math.SQRT1_2], ds, st, true); }
-  for (const y of spread(legsH + 2, y0, y1).slice(1, -1)) { A.line([x0, y], [x1, y], st); hook(A, [x1, y], [-Math.SQRT1_2, Math.SQRT1_2], ds, st, true); }
+// stirrup / tie: closed loop wrapped round the corner bars (corner radius = bar radius + half the stirrup), both ends hooked
+// 135° round the top-right corner bar; extra inner legs hooked round the inner top bars (and cross ties round the right face bars)
+// dT / dB: top / bottom corner bar diameters
+function hoop(A, x0, y0, x1, y1, ds, legsV = 0, legsH = 0, bx = null, dT = 0.016, dB = dT) {
+  const st = { layer: "4", color: RED, lw: 0.25 }, cap = Math.min((x1 - x0) / 3, (y1 - y0) / 3);
+  const rT = Math.min(dT / 2 + ds / 2, cap), rB = Math.min(dB / 2 + ds / 2, cap);
+  const corner = (cx, cy, r, a0) => Array.from({ length: 7 }, (_, i) => { const a = a0 + (Math.PI / 2) * (i / 6); return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+  A.poly([...corner(x1 - rB, y0 + rB, rB, -Math.PI / 2), ...corner(x1 - rT, y1 - rT, rT, 0), ...corner(x0 + rT, y1 - rT, rT, Math.PI / 2), ...corner(x0 + rB, y0 + rB, rB, Math.PI)], { ...st, closed: true });
+  const c = [x1 - rT, y1 - rT];
+  wrap(A, c, rT, Math.PI / 2, -1, ds, st); // end along the top leg: over the bar, down its right side, out to bottom-left
+  wrap(A, c, rT, 0, 1, ds, st); // end along the right leg: up its right side, over the top, out to bottom-left
+  const xs = bx || spread(legsV + 2, x0 + rT, x1 - rT).slice(1, -1);
+  for (const x of xs.slice(0, legsV)) { // leg on the bar's right side, hooked 135° over the top bar and under the bottom bar
+    A.line([x + rT, y0 + rB], [x + rT, y1 - rT], st); wrap(A, [x, y1 - rT], rT, 0, 1, ds, st); wrap(A, [x + rT - rB, y0 + rB], rB, 0, -1, ds, st);
+  }
+  for (const y of spread(legsH + 2, y0 + rB, y1 - rT).slice(1, -1)) { A.line([x0 + rT, y + rT], [x1 - rT, y + rT], st); wrap(A, [x1 - rT, y], rT, Math.PI / 2, -1, ds, st); }
 }
 
 // identical sectors collapse: I = M = J -> ALL, I = J -> BOTH END + MIDDLE, otherwise END I, MIDDLE, END J
@@ -386,7 +426,7 @@ function drawBeamSection(A, s, sec, cx, cy, k, { tf = 0, ground = false } = {}) 
   if (sec.skin) for (const y of spread(sec.skin.n + 2, bot + dcB, top - dcT).slice(1, -1)) { bar(A, L + side, y, barDia(sec.skin.bar)); bar(A, R - side, y, barDia(sec.skin.bar)); }
   if (sec.stir) {
     const m = Math.max(0, sec.stir.leg - 2), xs = sec.top[0] ? bx(sec.top[0]).slice(1, -1) : [];
-    hoop(A, sx0, sy0, sx1, sy1, ds, m, 0, xs.length >= m ? pick(xs, m) : null); // inner legs on the inner top bars
+    hoop(A, sx0, sy0, sx1, sy1, ds, m, 0, xs.length >= m ? pick(xs, m) : null, sec.top[0] ? db(sec.top[0]) : 0.016, sec.bot[0] ? db(sec.bot[0]) : 0.016); // inner legs on the inner top bars
   }
   A.dimChain([L, R], top + 3 * k, "h", 1);
   A.dimChain([bot, top], L - (tf > 0 ? Math.min(Math.max(0.45 * s.B, 0.1), 0.25) : 0) - 3 * k, "v", -1);
@@ -427,10 +467,11 @@ function drawColumnSection(A, s, det, cx, cy, k) {
       if (li === 0 && det.tie) {
         const o = l.dc - d / 2 - tieD / 2;
         const X0 = cx - s.B / 2 + o, X1 = cx + s.B / 2 - o, Y0 = cy - s.H / 2 + o, Y1 = cy + s.H / 2 - o;
-        hoop(A, X0, Y0, X1, Y1, tieD, 0, 0);
-        // cross ties beyond the hoop's two legs, hooked at one end: Y legs run along local y (across B, drawn horizontal), Z legs along local z (across H)
-        for (const y of pick(spread(ny, y0, y1).slice(1, -1), Math.max(0, det.tie.ny - 2))) { A.line([X0, y], [X1, y], tst); hook(A, [X1, y], [-Math.SQRT1_2, Math.SQRT1_2], tieD, tst, true); }
-        for (const x of pick(spread(nx, x0, x1).slice(1, -1), Math.max(0, det.tie.nz - 2))) { A.line([x, Y0], [x, Y1], tst); hook(A, [x, Y1], [-Math.SQRT1_2, -Math.SQRT1_2], tieD, tst, true); }
+        hoop(A, X0, Y0, X1, Y1, tieD, 0, 0, null, d, d);
+        const R = d / 2 + tieD / 2;
+        // cross ties beyond the hoop's two legs, hooked 135° round a bar at both ends: Y legs run along local y (across B, drawn horizontal), Z legs along local z (across H)
+        for (const y of pick(spread(ny, y0, y1).slice(1, -1), Math.max(0, det.tie.ny - 2))) { A.line([x0, y + R], [x1, y + R], tst); wrap(A, [x1, y], R, Math.PI / 2, -1, tieD, tst); wrap(A, [x0, y], R, Math.PI / 2, 1, tieD, tst); }
+        for (const x of pick(spread(nx, x0, x1).slice(1, -1), Math.max(0, det.tie.nz - 2))) { A.line([x + R, y0], [x + R, y1], tst); wrap(A, [x, y1], R, 0, 1, tieD, tst); wrap(A, [x, y0], R, 0, -1, tieD, tst); }
       }
     }
   });
@@ -455,7 +496,7 @@ const charW = (h, fs) => h * 0.85 * fs; // character width (mm) of a text h mm h
 function beamSheets(groups, rowDefs, { k, fs, kind, label, note }) {
   const W = 300, H = 248, labW = 38 * fs, hHead = 8 * fs, hVal = 7 * fs;
   const maxB = Math.max(...groups.flatMap(g => g.cols.map(c => c.sec.B + (c.tf ? 2 * Math.min(Math.max(0.45 * c.sec.B, 0.1), 0.25) : 0))));
-  const maxH = Math.max(...groups.flatMap(g => g.cols.map(c => c.sec.H + (c.ground ? 0.15 : 0))));
+  const maxH = Math.max(...groups.flatMap(g => g.cols.map(c => c.sec.H + (c.ground ? 0.3 : 0))));
   const hDraw = maxH / k + 28; // position label + section + dimensions + margin
   const longest = Math.max(4, ...groups.flatMap(g => g.cols.flatMap(c => Object.values(c.vals).map(t => String(t).length))));
   const colW = Math.max(30, maxB / k + 16, longest * charW(2, fs) + 6);
@@ -497,7 +538,7 @@ function beamSheets(groups, rowDefs, { k, fs, kind, label, note }) {
           const cx0 = x + ci * colW, cxm = cx0 + colW / 2;
           if (ci) A.line(P(cx0, yRows[0]), P(cx0, yEnd), thin);
           A.text(P(cxm, yRows[0] + 2.5), c.label, { ...T_VAL, layer: "3", align: "center", valign: "top" }); // position at the top of the cell
-          c.draw(A, cxm * k + 2 * k, -((yRows[0] + yRows[1]) / 2 + 3) * k); // a little right and down: room for the label and dimensions
+          c.draw(A, cxm * k + 2 * k, -((yRows[0] + yRows[1]) / 2 + 3) * k + (c.ground ? 0.15 : 0)); // a little right and down: room for the label and dimensions
           rowDefs.forEach(([key], i) => A.text(P(cxm, (yRows[1 + i] + yRows[2 + i]) / 2), c.vals[key] ?? "-", { ...T_VAL, align: "center", valign: "middle" }));
         });
       }
@@ -593,7 +634,7 @@ function rebarTables(model, rebar, opts = {}) {
       })), rank: [/^FG/i, /^FB/i, /^TB/i].findIndex(re => re.test(det.name || s.name)) >>> 0 >= 3 ? (ground ? 3 : 4) : [/^FG/i, /^FB/i, /^TB/i].findIndex(re => re.test(det.name || s.name)) };
     }).sort((a, b) => a.rank - b.rank || byName(a, b)); // base level first (FG, FB, TB, other ground beams), then B, G ... by name
     const rows = [["top", "TOP BAR"], ["bot", "BOTTOM BAR"], ["stir", "STIRRUP"], ["skin", "SKIN BAR"]];
-    tables.push({ groups, sheets: beamSheets, rows, o: { k, fs, kind: "beamrebar", label: "BEAM REBAR", note: "Gen NX Modify Beam Rebar Data" + edNote(rebar.beams) + ". Skin bar = total of both faces. Bars drawn evenly spaced; " + (tf > 0 ? `every beam drawn with a ${mm(tf)} mm slab flange; ` : "") + "ground beams (base level, FG / FB / TB) with brick, lean concrete and sand. Check before issue." } });
+    tables.push({ groups, sheets: beamSheets, rows, o: { k, fs, kind: "beamrebar", label: "BEAM REBAR", note: "Gen NX Modify Beam Rebar Data" + edNote(rebar.beams) + ". Skin bar = total of both faces. Bars drawn evenly spaced; " + (tf > 0 ? `every beam drawn with a ${mm(tf)} mm slab flange; ` : "") + "ground beams (base level, FG / FB / TB) with brick, lean concrete, backfill sand and compacted soil. Check before issue." } });
   }
   if (rebar.cols.length) {
     const k = scaleFor(rebar.cols);
