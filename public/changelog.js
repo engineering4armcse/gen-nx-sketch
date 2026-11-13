@@ -1,7 +1,10 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.33";
+export const VERSION = "3.34";
 export const CHANGELOG = [
+  { version: "3.34", date: "2026-11-13", by: "Kevin", editor: "Claude", changes: [
+    "2D sketch > Beam plans show the same columns and walls as the Column plans: besides those going up from the floor, the columns and walls from the floor below that stop under its beams are drawn too, as an outline (no fill), so every beam end has its support. Before, they were only drawn on the roof plan. The beam rebar plans and the PDF / DXF export follow.",
+  ] },
   { version: "3.33", date: "2026-11-13", by: "Arnold", editor: "Claude", changes: [
     "Rebar detail > beam sections: ground beams (FG / FB / TB) follow the office's typical detail. Brick walls each side of the web with a green outline and 45° hatch; under the beam, top to bottom, lean concrete (lantai kerja 50, concrete hatch), backfill sand (pasir urug 100, sand dots) and compacted soil (tanah dipadatkan 150, herringbone hatch), each in a red outline.",
     "Stirrups and ties wrap the corner bars (corner radius = bar radius + half the stirrup), and both ends of the 135° hook bend round the top corner main bar and run max(6 db, 75 mm) inward, so the hook holds the bar.",
