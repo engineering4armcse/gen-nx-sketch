@@ -2,6 +2,14 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.33 (2026-11-13)
+
+Requested by Arnold · edited by Claude
+
+- Rebar detail > beam sections: ground beams (FG / FB / TB) follow the office's typical detail. Brick walls each side of the web with a green outline and 45° hatch; under the beam, top to bottom, lean concrete (lantai kerja 50, concrete hatch), backfill sand (pasir urug 100, sand dots) and compacted soil (tanah dipadatkan 150, herringbone hatch), each in a red outline.
+- Stirrups and ties wrap the corner bars (corner radius = bar radius + half the stirrup), and both ends of the 135° hook bend round the top corner main bar and run max(6 db, 75 mm) inward, so the hook holds the bar.
+- Inner stirrup legs (beams) and cross ties (columns) are hooked 135° round a main bar at both ends.
+
 ## 3.32 (2026-11-11)
 
 Requested by Arnold · edited by Claude

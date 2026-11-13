@@ -1,7 +1,12 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.32";
+export const VERSION = "3.33";
 export const CHANGELOG = [
+  { version: "3.33", date: "2026-11-13", by: "Arnold", editor: "Claude", changes: [
+    "Rebar detail > beam sections: ground beams (FG / FB / TB) follow the office's typical detail. Brick walls each side of the web with a green outline and 45° hatch; under the beam, top to bottom, lean concrete (lantai kerja 50, concrete hatch), backfill sand (pasir urug 100, sand dots) and compacted soil (tanah dipadatkan 150, herringbone hatch), each in a red outline.",
+    "Stirrups and ties wrap the corner bars (corner radius = bar radius + half the stirrup), and both ends of the 135° hook bend round the top corner main bar and run max(6 db, 75 mm) inward, so the hook holds the bar.",
+    "Inner stirrup legs (beams) and cross ties (columns) are hooked 135° round a main bar at both ends.",
+  ] },
   { version: "3.32", date: "2026-11-11", by: "Arnold", editor: "Claude", changes: [
     "Fixed the browser crash \"Aw, Snap! Out of Memory\" when loading a model whose beam stirrups or column ties have no spacing in Gen NX (DIST 0 or 1e-6): the shop drawing drew stirrups at 0 spacing without end. Such stirrups / ties are now left out of the shop drawings and the BBS, and the rebar note names the sections to fix in Gen NX.",
     "Beam and column bars whose lap is longer than the stock length no longer loop when split into pieces.",
