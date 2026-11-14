@@ -492,7 +492,7 @@ function wallEnds(ns) {
 }
 
 // mode "column": columns and walls rising from this level, with labels.
-// mode "beam": beams and slabs at this level, with the columns/walls below shown as outlines (projection).
+// mode "beam": beams and slabs at this level, with the same columns/walls as the column plan (rising: filled, stopping here: outline).
 // Transfer columns: columns that start on a beam or slab, not on a column or wall below and not at the base.
 // A column split into segments counts once, by its lowest segment.
 export function transferCols(model) {
@@ -619,8 +619,9 @@ export function buildPlan(model, opts, level, mode = "beam") {
   // column plan: the columns/walls rising from here, plus those from below that stop here (outline only, no label)
   const stops = new Set(below.filter(e => !contAbove(e)));
   if (!proj && !rising.length) return null; // a column plan needs something rising from this level
-  // beam plan: the columns and walls going up from this floor (plan 2F shows the 2F columns); the roof, with nothing above, shows those below
-  const verts = proj ? (rising.length ? rising : below) : [...stops, ...rising]; // stopping ones first, so a column rising from the same spot draws over them
+  // column and beam plans show the same columns and walls: those going up from this floor (filled) and those from the floor
+  // below that stop here under its beams (outline only); stopping ones first, so a column rising from the same spot draws over them
+  const verts = [...stops, ...rising];
 
   const xs = [...grids.x.map(g => g.v)], ys = [...grids.y.map(g => g.v)];
   for (const e of [...beams, ...slabs, ...verts]) for (const id of e.nodes) { xs.push(N(id).x); ys.push(N(id).y); }

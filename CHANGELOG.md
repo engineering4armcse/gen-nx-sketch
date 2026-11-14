@@ -2,6 +2,12 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.34 (2026-11-13)
+
+Requested by Kevin · edited by Claude
+
+- 2D sketch > Beam plans show the same columns and walls as the Column plans: the ones going up from the floor (filled) and the ones from the floor below that stop under its beams (outline only). Before, those were only drawn on the roof plan. Beam rebar plans and the PDF / DXF export follow.
+
 ## 3.33 (2026-11-13)
 
 Requested by Arnold · edited by Claude
