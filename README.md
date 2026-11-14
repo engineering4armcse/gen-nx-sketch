@@ -67,6 +67,8 @@ netlify deploy --build --prod
 
 Or put this folder in a GitHub repository and use *Add new site > Import an existing project* on app.netlify.com; set `APP_PASSWORD` under Environment variables before the first deploy.
 
+With a Git deploy, every merge into `main` is published automatically, and every pull request gets a deploy preview. If the repository is private, Netlify only builds commits and pull requests from members of the Netlify team; others show "Deploy failed" within seconds. Add them under *Team settings > Members*, make the repository public, or start the deploy by hand (*Deploys > Trigger deploy > Deploy site*).
+
 The proxy only relays `GET /db/<TABLE>` (and `PUT` on `/db/REBB`, `/db/REBC`) to `*.midasit.com` hosts and never stores the key. To allow another host (for example a local Gen NX at `localhost`), set the env var `ALLOWED_HOSTS=localhost`.
 
 ## Notes
