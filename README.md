@@ -1,6 +1,6 @@
 # Gen NX Sketch
 
-Version 3.34. What changed in each version, and who asked for it, is in [CHANGELOG.md](CHANGELOG.md) and on the start page under *What changed in each version*.
+Version 3.35. What changed in each version, and who asked for it, is in [CHANGELOG.md](CHANGELOG.md) and on the start page under *What changed in each version*.
 
 Web app that reads a MIDAS Gen NX model through the MIDAS API and draws sketch plans and elevations for drafters.
 
@@ -12,6 +12,7 @@ Web app that reads a MIDAS Gen NX model through the MIDAS API and draws sketch p
 - **Views:** one plan per story (from Story Data, or from beam levels if there is none) and one elevation per grid line.
 - **Display:** monochrome drafting style, or colour by section with a legend. Section name labels can be turned on or off.
 - **Exports:** PDF (this view, one drawing type, or all views; A3 with title block and scale), DXF R12 (mm or m, layers, colours, linetypes and text styles of the office drawing standard STANDAR GAMBAR: SS00GG grid, SS00G3 beam edges, AS BALOK, SS00G5 columns, SS00H1/SS00H2 hatches, TEXT KOLOM/GIRDER/BEAM, DIM, REBAR; or one layer per section), and a standalone 3D HTML where hovering a member shows its section name.
+- **3D section plane:** *Section plane* in the 3D toolbar cuts the model across X, Y or Z, as in SketchUp. Move it with the slider, the m box, Snap (1.2 m above a level, 0.5 m in front of a grid line) or by dragging its orange frame; Flip keeps the other side, Section fill shows the cut faces dark.
 - **Project file:** *Save project* (Ctrl+S) keeps the model, the rebar edits and the project settings in one `<Project>_project.json`. See *Saving projects* below.
 
 ## Rebar detail
