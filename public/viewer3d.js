@@ -75,15 +75,22 @@ export function build3dHtml(data, { title = "3D Structure", scripts, colorMode =
   .seg{display:inline-flex;background:#f1f2f4;border-radius:4px;padding:2px;gap:2px}
   .seg button{height:26px;padding:0 9px;background:none}
   .seg button:hover{background:#fff}
-  .seg [aria-pressed=true]{background:#1d232b;color:#fff}
+  .seg [aria-pressed=true],.seg [aria-pressed=true]:hover{background:#1d232b;color:#fff}
   .ic{width:30px;padding:0!important;display:inline-grid;place-items:center}
   .ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
   .ic svg .f{fill:currentColor;stroke:none}
   #persp[aria-pressed=true] .off,#persp[aria-pressed=false] .on{display:none}
   .dd{position:relative}
-  #optBtn{padding-right:26px;position:relative}
-  #optBtn::after,#secBtn::after{content:"";position:absolute;right:11px;top:50%;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-70%) rotate(45deg)}
-  #optBtn[aria-expanded=true]::after,#secBtn[aria-expanded=true]::after{transform:translateY(-20%) rotate(-135deg)}
+  #optBtn,#cutBtn{padding-right:26px;position:relative}
+  #cutBtn[data-on=true]{background:#ffcf1a;color:#111417;font-weight:600}
+  #cutPanel{width:250px}
+  #cutPanel input[type=range]{width:100%}
+  #cutNum{width:84px;height:28px;font:inherit;padding:0 6px;border:1px solid #c5cbd3;border-radius:4px;box-sizing:border-box}
+  #cutPanel select{width:150px}
+  #cutPanel .seg button{width:34px}
+  #cutPanel .note{margin:0;color:#6b7480;font-size:11px}
+  #optBtn::after,#cutBtn::after,#secBtn::after{content:"";position:absolute;right:11px;top:50%;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-70%) rotate(45deg)}
+  #optBtn[aria-expanded=true]::after,#cutBtn[aria-expanded=true]::after,#secBtn[aria-expanded=true]::after{transform:translateY(-20%) rotate(-135deg)}
   .pop{position:absolute;top:36px;left:0;z-index:6;background:#fff;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:10px 12px;display:flex;flex-direction:column;gap:8px;width:220px}
   .pop .row{justify-content:space-between}
   .pop .sub{margin:4px 0 0;color:#6b7480;font-size:12px}
@@ -130,6 +137,17 @@ export function build3dHtml(data, { title = "3D Structure", scripts, colorMode =
       <p class="sub">Show</p>
       <span id="kinds"><label><input type="checkbox" data-kind="1" checked> Beams</label><label><input type="checkbox" data-kind="0" checked> Columns</label><label><input type="checkbox" data-kind="2" checked> Braces</label><label><input type="checkbox" data-kind="3" checked> Walls</label><label><input type="checkbox" data-kind="4" checked> Slabs</label></span>
     </div></span>
+  <span class="dd" id="cutDd"><button id="cutBtn" type="button" aria-expanded="false" aria-controls="cutPanel" data-on="false" title="Section plane: cut the model to look inside, as in SketchUp">Section plane</button>
+    <div id="cutPanel" class="pop" hidden>
+      <label><input type="checkbox" id="cutOn"> Cut the model</label>
+      <span class="row">Cut across <span class="seg" role="group" aria-label="Plane normal"><button type="button" data-ax="x" aria-pressed="false" title="Plane across X (vertical, cuts beams along X)">X</button><button type="button" data-ax="y" aria-pressed="false" title="Plane across Y (vertical, cuts beams along Y)">Y</button><button type="button" data-ax="z" aria-pressed="true" title="Horizontal plane (plan cut)">Z</button></span></span>
+      <input type="range" id="cutPos" min="0" max="1" step="0.001" aria-label="Plane position">
+      <span class="row"><label>At <input type="number" id="cutNum" step="0.1" aria-label="Plane position, m"> m</label><button type="button" id="cutFlip" title="Keep the other side">Flip</button></span>
+      <label class="row">Snap <select id="cutSnap" aria-label="Snap the plane to a level or grid line"></select></label>
+      <label><input type="checkbox" id="cutShow" checked> Show plane</label>
+      <label><input type="checkbox" id="cutFill" checked> Section fill (cut faces dark)</label>
+      <p class="note">Drag the orange frame of the plane to move it. Snap to a level cuts 1.2 m above the floor; to a grid line, 0.5 m in front of it.</p>
+    </div></span>
   <span class="dd sec" id="legend"><button id="secBtn" type="button" aria-expanded="false" aria-controls="secPanel">Sections</button>
   <div id="secPanel" class="pop" hidden><input id="secQ" type="search" placeholder="Search name, size or material" aria-label="Search sections" autocomplete="off">
     <p class="acts"><button type="button" id="secAll">Show these</button><button type="button" id="secOff">Hide these</button><button type="button" id="secApply" class="go" disabled>Apply</button></p>
@@ -160,9 +178,15 @@ const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(1, -1.5
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // ---- objects: every element has a solid form (extruded real section) and a line form; one is shown depending on Display ----
-const solid = c => new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide });
-const glass = (c, o) => new THREE.MeshLambertMaterial({ color: c, transparent: true, opacity: o, side: THREE.DoubleSide, depthWrite: false });
-const lmat = c => new THREE.LineBasicMaterial({ color: c });
+// section plane (SketchUp style): every member material is clipped by cutPlane; a solid's back faces, seen only through the cut,
+// are drawn dark (capOn) so the cut reads as a filled section
+renderer.localClippingEnabled = true;
+const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 1e9), CLIP = [cutPlane], CAP = { value: 0 };
+const capped = m => { m.onBeforeCompile = sh => { sh.uniforms.capOn = CAP;
+  sh.fragmentShader = sh.fragmentShader.replace("void main() {", "uniform float capOn; void main() {").replace("#include <dithering_fragment>", "#include <dithering_fragment>" + String.fromCharCode(10) + "if (capOn > 0.5 && !gl_FrontFacing) gl_FragColor = vec4(0.17, 0.19, 0.22, 1.0);"); }; return m; };
+const solid = c => capped(new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide, clippingPlanes: CLIP }));
+const glass = (c, o) => new THREE.MeshLambertMaterial({ color: c, transparent: true, opacity: o, side: THREE.DoubleSide, depthWrite: false, clippingPlanes: CLIP });
+const lmat = c => new THREE.LineBasicMaterial({ color: c, clippingPlanes: CLIP });
 const pal = { section: D.sections.map(s => s.color), kind: D.kinds.map(k => k.color) };
 const M = {};
 for (const m of ["section", "kind"]) M[m] = { solid: pal[m].map(solid), wall: pal[m].map(c => glass(c, 0.8)), slab: pal[m].map(c => glass(c, 0.45)), line: pal[m].map(lmat) };
@@ -208,7 +232,7 @@ for (const p of D.plates) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); g.setIndex(idx); g.computeVertexNormals();
   const mesh = new THREE.Mesh(g);
-  mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.35 })));
+  mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.35, clippingPlanes: CLIP })));
   const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(P));
   const u = { id, k, s, matl, mtype, t, plate: true, pts: P };
   mesh.userData = line.userData = u;
@@ -336,7 +360,7 @@ function refresh() {
     o.mesh.material = m.mesh; o.line.material = m.line;
     o.mesh.visible = v && !asLine(o.u); o.line.visible = v && asLine(o.u);
   }
-  for (const sp of nameGroup.children) sp.visible = !hidden.has(sp.userData.s) && !kindOff.has(sp.userData.k) && inFilter([sp.position]);
+  for (const sp of nameGroup.children) sp.visible = !hidden.has(sp.userData.s) && !kindOff.has(sp.userData.k) && inFilter([sp.position]) && kept(sp.position);
   hot = null;
 }
 // legend: every section with B x H and material; swatch = section colour, or its member-type colour in default mode
@@ -361,6 +385,7 @@ function filterList() {
 $("optBtn").onclick = () => { const open = $("optPanel").hidden; $("optPanel").hidden = !open; $("optBtn").setAttribute("aria-expanded", open); };
 addEventListener("pointerdown", e => { // a press anywhere else closes the menus
   if (!e.target.closest("#optBtn, #optPanel")) { $("optPanel").hidden = true; $("optBtn").setAttribute("aria-expanded", false); }
+  if (!e.target.closest("#cutDd")) { $("cutPanel").hidden = true; $("cutBtn").setAttribute("aria-expanded", false); }
   if (!e.target.closest("#legend")) { $("secPanel").hidden = true; $("secBtn").setAttribute("aria-expanded", false); }
 }, true);
 addEventListener("keydown", e => { if (e.key === "Escape" && !$("optPanel").hidden) { $("optPanel").hidden = true; $("optBtn").setAttribute("aria-expanded", false); $("optBtn").focus(); } });
@@ -447,7 +472,7 @@ renderer.domElement.addEventListener("pointermove", e => {
   ray.params.Line.threshold = (camera === oCam ? (oCam.top - oCam.bottom) / oCam.zoom : pCam.position.distanceTo(controls.target)) * 0.008;
   ray.setFromCamera(mouse, camera);
   const targets = objs.map(o => (o.line.visible ? o.line : o.mesh)).filter(t => t.visible);
-  const hit = ray.intersectObjects(targets, false)[0], m = hit ? hit.object : null;
+  const hit = cutDrag ? null : ray.intersectObjects(targets, false).find(h => kept(h.point)), m = hit ? hit.object : null;
   if (m !== hot) {
     if (hot) { const o = objs.find(o => o.mesh === hot || o.line === hot), mm = matFor(o); hot.material = hot === o.line ? mm.line : mm.mesh; }
     hot = m;
@@ -477,11 +502,88 @@ renderer.domElement.addEventListener("pointerup", e => {
 });
 renderer.domElement.addEventListener("pointerleave", () => { tip.style.display = "none"; });
 
+// ---- section plane ----
+const AX = ["x", "y", "z"], KEEP = { x: -1, y: 1, z: -1 }; // side kept by default: x below the plane, y beyond it, z below (plan cut)
+const cut = { on: false, ax: "z", pos: 0, sign: -1 };
+const kept = p => !cut.on || cutPlane.distanceToPoint(p) >= -1e-6;
+const cutGroup = new THREE.Group(); cutGroup.visible = false; scene.add(cutGroup);
+const cutFace = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xff8a00, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }));
+const cutEdge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([V(-0.5, -0.5, 0), V(0.5, -0.5, 0), V(0.5, 0.5, 0), V(-0.5, 0.5, 0)]), new THREE.LineBasicMaterial({ color: 0xff8a00 }));
+cutGroup.add(cutFace, cutEdge);
+function snapList() {
+  const sel = $("cutSnap"); sel.innerHTML = ""; sel.add(new Option(cut.ax === "z" ? "Level…" : "Grid line…", ""));
+  if (cut.ax === "z") D.levels.forEach((l, i) => sel.add(new Option(l.name + " (EL " + (l.z >= 0 ? "+" : "") + l.z.toFixed(3) + ")", "L" + i)));
+  else D.grids[cut.ax].forEach((g, i) => sel.add(new Option("Grid " + g.label, "G" + i)));
+}
+function placeCut() {
+  const a = AX.indexOf(cut.ax), lo = box0.min.getComponent(a), hi = box0.max.getComponent(a), m = R0 * 0.02;
+  cut.pos = Math.min(hi + m, Math.max(lo - m, cut.pos));
+  const n = V(0, 0, 0); n.setComponent(a, cut.sign); cutPlane.set(n, cut.on ? -cut.sign * cut.pos : 1e9);
+  CAP.value = cut.on && $("cutFill").checked ? 1 : 0;
+  // the plane drawn over the model's extent, a little larger
+  const c = box0.getCenter(V()), sz = box0.getSize(V()).multiplyScalar(1.08).addScalar(R0 * 0.04);
+  cutGroup.position.copy(c); cutGroup.position.setComponent(a, cut.pos);
+  cutGroup.rotation.set(cut.ax === "y" ? Math.PI / 2 : 0, cut.ax === "x" ? Math.PI / 2 : 0, 0);
+  cutGroup.scale.set(cut.ax === "x" ? sz.z : sz.x, cut.ax === "y" ? sz.z : sz.y, 1);
+  cutGroup.visible = cut.on && $("cutShow").checked;
+  const r = $("cutPos"); r.min = (lo - m).toFixed(3); r.max = (hi + m).toFixed(3); r.step = Math.max(0.001, R0 / 2000).toFixed(3); r.value = cut.pos;
+  if (document.activeElement !== $("cutNum")) $("cutNum").value = cut.pos.toFixed(3);
+  $("cutBtn").dataset.on = cut.on;
+  for (const sp of nameGroup.children) sp.visible = !hidden.has(sp.userData.s) && !kindOff.has(sp.userData.k) && inFilter([sp.position]) && kept(sp.position);
+  dirty = true;
+}
+function setAxis(ax) {
+  cut.ax = ax; cut.sign = KEEP[ax]; const a = AX.indexOf(ax);
+  cut.pos = (box0.min.getComponent(a) + box0.max.getComponent(a)) / 2;
+  document.querySelectorAll("[data-ax]").forEach(b => b.setAttribute("aria-pressed", b.dataset.ax === ax));
+  snapList(); placeCut();
+}
+$("cutBtn").onclick = () => { const open = $("cutPanel").hidden; $("cutPanel").hidden = !open; $("cutBtn").setAttribute("aria-expanded", open); };
+$("cutOn").onchange = e => { cut.on = e.target.checked; placeCut(); };
+const turnOn = () => { if (!cut.on) { cut.on = true; $("cutOn").checked = true; } };
+document.querySelectorAll("[data-ax]").forEach(b => (b.onclick = () => { turnOn(); setAxis(b.dataset.ax); }));
+$("cutPos").oninput = e => { turnOn(); cut.pos = +e.target.value; $("cutSnap").value = ""; placeCut(); };
+$("cutNum").onchange = e => { if (e.target.value === "" || isNaN(+e.target.value)) return placeCut(); turnOn(); cut.pos = +e.target.value; $("cutSnap").value = ""; placeCut(); };
+$("cutFlip").onclick = () => { turnOn(); cut.sign = -cut.sign; placeCut(); };
+$("cutSnap").onchange = e => {
+  const v = e.target.value; if (!v) return; turnOn();
+  if (v[0] === "L") { const i = +v.slice(1), z = D.levels[i].z, nz = D.levels[i + 1] ? D.levels[i + 1].z : z + 3; cut.pos = z - cut.sign * Math.min(1.2, (nz - z) / 2); }
+  else cut.pos = D.grids[cut.ax][+v.slice(1)].v - cut.sign * 0.5;
+  placeCut();
+};
+$("cutShow").onchange = placeCut; $("cutFill").onchange = placeCut;
+addEventListener("keydown", e => { if (e.key === "Escape" && !$("cutPanel").hidden) { $("cutPanel").hidden = true; $("cutBtn").setAttribute("aria-expanded", false); $("cutBtn").focus(); } });
+// drag the plane by its orange frame: the plane follows the pointer along its normal
+let cutDrag = null;
+const cutRay = new THREE.Raycaster();
+function rayAt(e) { const r = renderer.domElement.getBoundingClientRect(); cutRay.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera); return cutRay.ray; }
+function alongAxis(rr, p0, n) { // parameter s of the point on line p0 + n s closest to the ray
+  const w = rr.origin.clone().sub(p0), b = rr.direction.dot(n), den = 1 - b * b;
+  return den < 1e-4 ? null : (w.dot(n) - b * w.dot(rr.direction)) / den;
+}
+host.addEventListener("pointerdown", e => { // on the host, capture phase: before OrbitControls sees the press
+  if (!cutGroup.visible || e.button !== 0) return;
+  const rr = rayAt(e); cutRay.params.Line.threshold = ray.params.Line.threshold || R0 * 0.01;
+  if (!cutRay.intersectObject(cutEdge, false).length) return;
+  const n = V(0, 0, 0); n.setComponent(AX.indexOf(cut.ax), 1); const p0 = cutGroup.position.clone(), s0 = alongAxis(rr, p0, n);
+  if (s0 === null) return;
+  cutDrag = { n, p0, s0, pos0: cut.pos }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); e.stopPropagation(); e.preventDefault();
+}, true);
+renderer.domElement.addEventListener("pointermove", e => {
+  if (cutDrag) { const s = alongAxis(rayAt(e), cutDrag.p0, cutDrag.n); if (s !== null) { cut.pos = cutDrag.pos0 + s - cutDrag.s0; $("cutSnap").value = ""; placeCut(); } return; }
+  if (!cutGroup.visible) return;
+  cutRay.params.Line.threshold = ray.params.Line.threshold || R0 * 0.01;
+  rayAt(e); const over = cutRay.intersectObject(cutEdge, false).length > 0;
+  cutEdge.material.color.set(over ? 0xff5a00 : 0xff8a00); if (over) renderer.domElement.style.cursor = "move";
+});
+addEventListener("pointerup", () => { if (cutDrag) { cutDrag = null; controls.enabled = true; } });
+
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); pCam.aspect = w / h; pCam.updateProjectionMatrix(); if (camera === oCam) frustum(); }
 addEventListener("resize", resize); resize();
 legend(); setDisplay(display); fitBox(); view("iso"); useCam(oCam); // perspective off at start
 // draw only when something can have changed: camera motion (update() is true while damping settles) or any user input
 let dirty = true;
+setAxis("z"); // plane ready across Z at mid height; off until Cut the model is ticked
 for (const ev of ["pointermove", "pointerdown", "pointerup", "wheel", "keydown", "click", "change", "input", "resize", "message"]) addEventListener(ev, () => { dirty = true; }, { passive: true, capture: true });
 (function loop() { if (controls.update() || dirty) { dirty = false; alignNames(); renderer.render(scene, camera); } requestAnimationFrame(loop); })();
 </script></body></html>`;

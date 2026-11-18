@@ -2,6 +2,13 @@
 
 Newest first. *Requested by* is who asked for the change, *edited by* who made it. The same list is in `public/changelog.js` and on the start page.
 
+## 3.35 (2026-11-18)
+
+Requested by Arnold · edited by Claude
+
+- 3D model: new Section plane menu, as in SketchUp. Tick Cut the model to slice the structure with a plane across X, Y or Z and look inside; move it with the slider, type its position in m, or drag the orange frame of the plane in the view. Flip keeps the other side.
+- Snap puts the plane 1.2 m above a level (plan cut) or 0.5 m in front of a grid line. Section fill draws the cut faces of members dark; Show plane hides the orange plane and keeps the cut. Members, names and hover tips on the cut-away side are left out. Also in the exported 3D HTML.
+
 ## 3.34 (2026-11-13)
 
 Requested by Kevin · edited by Claude

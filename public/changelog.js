@@ -1,7 +1,11 @@
 // Version log: newest first. "by" is the person who asked for the change, "editor" who made it.
 // Add an entry for every release, and bump VERSION with it.
-export const VERSION = "3.34";
+export const VERSION = "3.35";
 export const CHANGELOG = [
+  { version: "3.35", date: "2026-11-18", by: "Arnold", editor: "Claude", changes: [
+    "3D model: new Section plane menu, as in SketchUp. Tick Cut the model to slice the structure with a plane across X, Y or Z and look inside; move it with the slider, type its position in m, or drag the orange frame of the plane in the view. Flip keeps the other side.",
+    "Snap puts the plane 1.2 m above a level (plan cut) or 0.5 m in front of a grid line. Section fill draws the cut faces of members dark; Show plane hides the orange plane and keeps the cut. Members, names and hover tips on the cut-away side are left out. Also in the exported 3D HTML.",
+  ] },
   { version: "3.34", date: "2026-11-13", by: "Kevin", editor: "Claude", changes: [
     "2D sketch > Beam plans show the same columns and walls as the Column plans: besides those going up from the floor, the columns and walls from the floor below that stop under its beams are drawn too, as an outline (no fill), so every beam end has its support. Before, they were only drawn on the roof plan. The beam rebar plans and the PDF / DXF export follow.",
   ] },
